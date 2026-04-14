@@ -1,18 +1,27 @@
 export const getSubdomain = () => {
-	if (import.meta.env.VITE_NODE_ENV === 'development') {
-		const host = window.location.hostname;
-		if (window.location.hostname === 'localhost') return null;
-		const parts = host.split('.');
-		return parts[0] || null;
-	} else {
-		try {
-			const parsedUrl = new URL(window.location.href);
-			const hostname = parsedUrl.hostname;
-			const parts = hostname.split('.');
-			return parts.length > 2 ? parts[0] : null;
-		} catch (e) {
-			console.error('Invalid URL', e);
-			return null;
-		}
-	}
+  try {
+    const hostname = window.location.hostname;
+
+    if (hostname.includes("localhost")) {
+      const parts = hostname.split(".");
+      return parts.length > 1 ? parts[0] : null;
+    }
+
+    const parts = hostname.split(".");
+
+    if (parts[0] === "www") {
+      parts.shift();
+    }
+
+    if (parts.length > 2) {
+      return parts[0];
+    }
+
+    return null;
+  } catch (e) {
+    console.error("Error extracting subdomain:", e);
+    return null;
+  }
 };
+
+console.log(getSubdomain());
