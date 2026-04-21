@@ -1,12 +1,12 @@
 import {
   PutObjectCommand,
-  UploadPartCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
   ListObjectsV2Command,
   PutObjectCommandInput,
   ListObjectsV2CommandInput,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { Upload } from "@aws-sdk/lib-storage";
 import path from "path";
 import { FolderContents, FolderResult, UploadResult } from "./types";
 
@@ -26,7 +26,7 @@ export const createFolder = async (
   try {
     const sanitizedFolderName = path
       .normalize(folderName)
-      .replace(/^(\.\.(\/|\\|$))+/, "");
+      .replace(/^(\.\.([/\\]|$))+/, "");
     const folderKey = `${instructorId}/${courseId}/${sanitizedFolderName}/`;
 
     const params: PutObjectCommandInput = {
@@ -52,51 +52,97 @@ export const createFolder = async (
   }
 };
 
+// Use PutObjectCommand (single-part PUT) instead of multipart Upload.
+// Multipart uploads can fail with InvalidPart ETag mismatches on some S3
+// bucket configurations. PutObjectCommand supports files up to 5 GB and
+// has no part complexity.
 export const uploadVideo = async (
   instructorId: string,
   courseId: string,
   folderName: string,
   videoFile: Buffer,
   filename: string,
+  contentType: string = "video/mp4",
 ): Promise<UploadResult> => {
   try {
     const sanitizedFilename = path
       .normalize(filename)
-      .replace(/^(\.\.(\/|\\|$))+/, "");
+      .replace(/^(\.\.([/\\]|$))+/, "");
     const sanitizedFolderName = path
       .normalize(folderName)
-      .replace(/^(\.\.(\/|\\|$))+/, "");
-    const videoKey = `${instructorId}/${courseId}/${sanitizedFolderName}/${sanitizedFilename}`;
+      .replace(/^(\.\.([/\\]|$))+/, "");
+    const fileKey = `${instructorId}/${courseId}/${sanitizedFolderName}/${sanitizedFilename}`;
 
-    const upload = new Upload({
-      client: s3Client,
-      params: {
+    await s3Client.send(
+      new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME!,
-        Key: videoKey,
+        Key: fileKey,
         Body: videoFile,
-        ContentType: "video/*",
+        ContentType: contentType,
+        ContentDisposition: "inline", // lets browsers render PDFs/videos directly
         Metadata: {
           "instructor-id": instructorId,
           "original-filename": filename,
         },
-      },
-    });
-
-    const result = await upload.done();
+      }),
+    );
 
     return {
       success: true,
-      videoUrl: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${videoKey}`,
-      key: videoKey,
-      message: "Video uploaded successfully",
+      videoUrl: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
+      key: fileKey,
+      message: "File uploaded successfully",
     };
   } catch (error) {
-    console.error("Error uploading video:", error);
+    console.error("Error uploading file:", error);
     throw new Error(
-      `Failed to upload video: ${
+      `Failed to upload file: ${
         error instanceof Error ? error.message : "Unknown error"
       }`,
     );
+  }
+};
+
+// Delete a single file from S3 by its public URL.
+export const deleteFile = async (fileUrl: string): Promise<void> => {
+  try {
+    const url = new URL(fileUrl);
+    const key = decodeURIComponent(url.pathname.slice(1));
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME!,
+        Key: key,
+      }),
+    );
+  } catch (error) {
+    console.error("Error deleting file from S3:", error);
+  }
+};
+
+// Batch-delete up to 1000 files from S3 in a single API call.
+// Used when deleting a folder — removes all its videos/notes at once.
+export const deleteMultipleFiles = async (fileUrls: string[]): Promise<void> => {
+  if (!fileUrls.length) return;
+
+  try {
+    const objects = fileUrls.map((fileUrl) => {
+      const url = new URL(fileUrl);
+      return { Key: decodeURIComponent(url.pathname.slice(1)) };
+    });
+
+    // S3 DeleteObjects supports up to 1000 keys per request
+    const chunkSize = 1000;
+    for (let i = 0; i < objects.length; i += chunkSize) {
+      const chunk = objects.slice(i, i + chunkSize);
+      await s3Client.send(
+        new DeleteObjectsCommand({
+          Bucket: process.env.AWS_BUCKET_NAME!,
+          Delete: { Objects: chunk, Quiet: true },
+        }),
+      );
+    }
+  } catch (error) {
+    console.error("Error batch-deleting files from S3:", error);
   }
 };
 
@@ -108,7 +154,7 @@ export const listFolderContents = async (
   try {
     const sanitizedFolderName = path
       .normalize(folderName)
-      .replace(/^(\.\.(\/|\\|$))+/, "");
+      .replace(/^(\.\.([/\\]|$))+/, "");
     const prefix = `${instructorId}/${courseId}/${sanitizedFolderName}`;
 
     const params: ListObjectsV2CommandInput = {

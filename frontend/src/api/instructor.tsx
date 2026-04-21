@@ -3,7 +3,7 @@ import axios from "axios";
 import { API_URL } from "../config";
 import { Instructor } from "../utils/types";
 
-export const getInstructor = () => {
+export const useInstructor = () => {
   const [instructor, setInstructor] = useState<Instructor>();
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,4 +37,4 @@ export const getInstructor = () => {
   return { instructor, loading, error, fetchInstructor };
 };
 
-export default getInstructor;
+export default useInstructor;

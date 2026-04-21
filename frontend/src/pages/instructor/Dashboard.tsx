@@ -24,7 +24,6 @@ const Dashboard = () => {
   const handleClickAway = () => {
     setIsAddCourseModalOpen(false);
     setIsUpdateCourseModalOpen(false);
-    // fetchCourses();
   };
 
   useEffect(() => {
@@ -32,6 +31,12 @@ const Dashboard = () => {
       setCourses(data.courses);
     }
   }, [data]);
+
+  // Total revenue = sum of (enrollments × price) for every course
+  const totalRevenue = courses.reduce(
+    (sum, course) => sum + (course._count?.enrollments ?? 0) * course.price,
+    0,
+  );
 
   useEffect(() => {
     if (isAddCourseModalOpen || isUpdateCourseModalOpen) {
@@ -112,7 +117,7 @@ const Dashboard = () => {
                         Total Revenue
                       </h4>
                       <h3 className="text-3xl text-gray-700 font-semibold leading-tight mt-3">
-                        ₹0
+                        ₹{totalRevenue.toLocaleString("en-IN")}
                       </h3>
                     </div>
                   </div>
@@ -123,53 +128,85 @@ const Dashboard = () => {
         </div>
 
         {/* Manage Courses */}
-        <div className="max-w-screen-lg mx-auto mt-10">
-          <div className="flex items-center justify-between">
+        <div className="max-w-screen-lg mx-auto mt-10 pb-16">
+          <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold">Manage Courses</h1>
             <button
-              className="flex items-center bg-black px-4 py-2 rounded-lg text-white"
+              className="flex items-center bg-black px-4 py-2 rounded-lg text-white text-sm font-medium hover:bg-gray-800 transition"
               onClick={() => setIsAddCourseModalOpen(true)}>
-              <Plus size={18} />
+              <Plus size={16} />
               <span className="pl-2">Add Course</span>
             </button>
           </div>
-          <div className="-mx-2 md:flex mt-8">
-            {!courses ? (
-              <div className="text-center w-full">
-                <h1 className="text2xl font-semibold">No courses found!</h1>
-              </div>
-            ) : (
-              courses.map((course, index) => (
-                <div className="w-full md:w-1/3 px-2" key={index}>
-                  <div className="rounded-lg mb-4">
-                    <Link to={`/instructor/dashboard/course/${course.id}`}>
-                      <div className="rounded-lg bg-white relative overflow-hidden border cursor-pointer">
-                        <div className="">
-                          <img src={course.thumbnailUrl} alt="" />
-                        </div>
-                        <div className="p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h1 className="text-lg font-semibold">
-                              {course.title}
-                            </h1>
-                          </div>
-                          <p>{course.description}</p>
-                          {course.startDate && (
-                            <div className="flex items-center text-sm">
-                              Starts on: &nbsp;
-                              <span className="bg-gray-200 rounded-full px-2 py-1 text-xs font-bold">
-                                {course.startDate.slice(0, 10)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
+
+          {!courses.length ? (
+            <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-xl">
+              <p className="text-gray-400">
+                No courses yet. Create your first course!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {courses.map((course) => (
+                <Link
+                  to={`/instructor/dashboard/course/${course.id}`}
+                  key={course.id}
+                  className="group">
+                  <div className="h-full flex flex-col rounded-xl bg-white border border-gray-200 overflow-hidden hover:shadow-md transition">
+                    {/* Fixed-height thumbnail */}
+                    <div className="aspect-video w-full overflow-hidden bg-gray-100">
+                      <img
+                        src={course.thumbnailUrl}
+                        alt={course.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                      />
+                    </div>
+
+                    {/* Card body — grows to fill height */}
+                    <div className="p-4 flex flex-col flex-1 gap-2">
+                      <h2 className="text-base font-semibold text-gray-900 leading-snug line-clamp-2">
+                        {course.title}
+                      </h2>
+                      <p className="text-xs text-gray-400 line-clamp-2 flex-1">
+                        {course.description}
+                      </p>
+
+                      {/* Badges row */}
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {course.level && (
+                          <span className="bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 text-xs font-medium">
+                            {course.level}
+                          </span>
+                        )}
+                        {course.type && (
+                          <span className="bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 text-xs font-medium">
+                            {course.type}
+                          </span>
+                        )}
+                        {(course._count?.enrollments ?? 0) > 0 && (
+                          <span className="bg-green-50 text-green-600 rounded-full px-2 py-0.5 text-xs font-medium">
+                            {course._count!.enrollments} enrolled
+                          </span>
+                        )}
                       </div>
-                    </Link>
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                        <span className="text-sm font-bold text-gray-900">
+                          ₹{course.price.toLocaleString("en-IN")}
+                        </span>
+                        {course.startDate && (
+                          <span className="text-xs text-gray-400">
+                            {course.startDate.slice(0, 10)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -4,9 +4,22 @@ declare global {
   }
 }
 
+export interface CourseContent {
+  id: string;
+  name: string;
+  type: "VIDEO" | "NOTES";
+  url: string;
+  position: number;
+  courseFolderId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CourseFolder {
   id: string;
   name: string;
+  courseId: string;
+  courseContents?: CourseContent[];
 }
 
 export interface Course {
@@ -21,6 +34,9 @@ export interface Course {
   endDate: string;
   courseFolders?: CourseFolder[];
   enrollments?: Enrollment[];
+  _count?: {
+    enrollments: number;
+  };
 }
 
 export interface Instructor {
