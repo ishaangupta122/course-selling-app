@@ -8,7 +8,6 @@ const InstructorNavbar = () => {
   const navigate = useNavigate();
   const { isAuthenticated, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -48,16 +47,13 @@ const InstructorNavbar = () => {
           <>
             <div className="relative">
               <Link
-                to="#"
-                className="w-fit flex items-center justify-center font-medium border rounded-full px-4 py-2"
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
+                to="/profile"
+                className="w-fit flex items-center justify-center font-medium border rounded-full px-4 py-2 hover:bg-gray-50 transition"
+                onClick={() => setIsMobileMenuOpen(false)}>
                 <div className="pr-1">
                   <CircleUserRound />
                 </div>
                 <div>Profile</div>
-                {/* <div className='pl-1'>
-									<ChevronDown size={16} />
-								</div> */}
               </Link>
             </div>
             <div className="">
@@ -113,16 +109,12 @@ const InstructorNavbar = () => {
                   </div>
                   <div className="relative">
                     <Link
-                      to="#"
-                      className="flex items-center justify-center font-medium border rounded-full px-4 py-2"
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
+                      to="/profile"
+                      className="flex items-center justify-center font-medium border rounded-full px-4 py-2 hover:bg-gray-50 transition">
                       <div className="pr-1">
                         <CircleUserRound />
                       </div>
                       <div>Profile</div>
-                      {/* <div className='pl-1'>
-												<ChevronDown size={16} />
-											</div> */}
                     </Link>
                   </div>
                   <div>

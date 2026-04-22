@@ -24,4 +24,4 @@ export const getSubdomain = () => {
   }
 };
 
-console.log(getSubdomain());
+// console.log(getSubdomain());

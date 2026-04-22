@@ -18,6 +18,7 @@ import Profile from "./pages/platform/Profile";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AddVideo from "./pages/platform/AddVideo";
 import StudentCourseViewer from "./pages/instructor/StudentCourseViewer";
+import StudentProfile from "./pages/instructor/StudentProfile";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +88,14 @@ const TenantRoutes = () => {
           element={
             <ProtectedRoute>
               <StudentCourseViewer />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <StudentProfile />
             </ProtectedRoute>
           }
         />
