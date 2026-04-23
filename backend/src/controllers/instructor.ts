@@ -8,6 +8,7 @@ import {
   CourseSchema,
 } from "../zod/validator";
 import { extractSubdomain } from "../helper/subdomainHelper";
+import { deleteMultipleFiles } from "../helper/aws";
 
 function generateSlug(organization: string): string {
   return organization
@@ -344,7 +345,14 @@ export const GetCourses = async (
         id: req.instructorId,
       },
       include: {
-        courses: true,
+        // Include enrollment count per course so the dashboard can calculate revenue
+        courses: {
+          include: {
+            _count: {
+              select: { enrollments: true },
+            },
+          },
+        },
       },
     });
 
@@ -379,8 +387,13 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
         id: courseId,
         instructorId: instructorId,
       },
+      // Include folder contents so the manage-course page can show videos/notes
       include: {
-        courseFolders: true,
+        courseFolders: {
+          include: {
+            courseContents: true,
+          },
+        },
       },
     });
 
@@ -404,7 +417,7 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// Delete Course
+// Delete Course — removes all S3 files for every folder/content item, then deletes DB record
 export const DeleteCourse = async (
   req: Request,
   res: Response,
@@ -413,15 +426,36 @@ export const DeleteCourse = async (
   const instructorId = req.instructorId;
 
   try {
-    await prisma.course.delete({
-      where: {
-        id: courseId,
-        instructorId: instructorId,
+    // Fetch all content URLs across all folders so we can clean up S3
+    const course = await prisma.course.findUnique({
+      where: { id: courseId, instructorId: instructorId },
+      include: {
+        courseFolders: {
+          include: { courseContents: true },
+        },
       },
     });
 
+    if (!course) {
+      res.status(404).json({ message: "Course not found!" });
+      return;
+    }
+
+    // Collect every file URL in the course
+    const fileUrls = course.courseFolders.flatMap((folder) =>
+      folder.courseContents.map((c) => c.url),
+    );
+
+    // Batch-delete all files from S3 in one call (cascade handles DB rows)
+    await deleteMultipleFiles(fileUrls);
+
+    // Delete the course — Prisma cascade removes folders + contents automatically
+    await prisma.course.delete({
+      where: { id: courseId, instructorId: instructorId },
+    });
+
     res.status(200).json({
-      message: "Course deleted successfully!",
+      message: `Course deleted with ${fileUrls.length} file(s) removed from storage.`,
     });
   } catch (error) {
     console.log(error);

@@ -27,24 +27,25 @@ const CourseDetail = () => {
     }
   }, [data]);
 
-  const checkEnrollment = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/student/${courseId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-      setIsEnrolled(response.data.enrolled);
-    } catch (error) {
-      console.error("Error checking enrollment:", error);
-    }
-  };
-
   useEffect(() => {
-    checkEnrollment();
+    const checkEnrollment = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/student/${courseId}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        setIsEnrolled(response.data.enrolled);
+      } catch (error) {
+        console.error("Error checking enrollment:", error);
+      }
+    };
+    if (isAuthenticated) {
+      checkEnrollment();
+    }
   }, [isAuthenticated, courseId]);
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     try {
       const response = await axios.post(
@@ -88,7 +89,7 @@ const CourseDetail = () => {
       name: "Courses",
       description: `Payment for Course - ${course?.title}`,
       order_id: orderId,
-      handler: async function (response: any) {
+      handler: async function (response: { razorpay_payment_id: string, razorpay_order_id: string, razorpay_signature: string }) {
         try {
           const captureResponse = await axios.post(
             `${API_URL}/course/capturePayment`,
