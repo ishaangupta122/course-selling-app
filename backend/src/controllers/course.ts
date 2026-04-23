@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import Razorpay from "razorpay";
-import prisma from "../prisma";
 import { extractSubdomain } from "../helper/subdomainHelper";
 import { CreateFolderSchema } from "../zod/validator";
 import {
@@ -15,19 +14,63 @@ import {
 } from "@aws-sdk/client-s3";
 import path from "path";
 import crypto from "crypto";
+import { nanoid } from "nanoid";
+import { query, withTransaction } from "../db";
+import {
+  buildCourseWithFolders,
+  toEnrollmentPayload,
+} from "../helper/dbMappers";
+import {
+  ContentOwnershipRow,
+  CourseContentRow,
+  CourseControllerRequest,
+  CourseFolderRow,
+  CourseRow,
+  EnrollmentRow,
+  FolderOwnershipRow,
+  InstructorRow,
+  PaymentRow,
+  StudentRow,
+} from "../helper/types";
+import { SQL } from "../helper/queries";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID!,
   key_secret: process.env.RAZORPAY_KEY_SECRET!,
 });
 
-interface CustomRequest extends Request {
-  studentId?: string;
-  courseId?: string;
-  orderId?: string;
+function getFirstParam(param: string | string[]) {
+  return Array.isArray(param) ? param[0] : param;
 }
 
-// Get all courses
+async function getInstructorBySlug(slug: string) {
+  const result = await query<InstructorRow>(SQL.instructor.findBySlug, [slug]);
+  return result.rows[0] ?? null;
+}
+
+async function getInstructorById(instructorId: string) {
+  const result = await query<InstructorRow>(SQL.instructor.findById, [
+    instructorId,
+  ]);
+  return result.rows[0] ?? null;
+}
+
+async function getCourseDetails(courseId: string) {
+  const courseResult = await query<CourseRow>(SQL.course.findById, [courseId]);
+  const course = courseResult.rows[0];
+
+  if (!course) {
+    return null;
+  }
+
+  const [folderResult, contentResult] = await Promise.all([
+    query<CourseFolderRow>(SQL.course.getFoldersByCourseId, [courseId]),
+    query<CourseContentRow>(SQL.course.getContentsByCourseId, [courseId]),
+  ]);
+
+  return buildCourseWithFolders(course, folderResult.rows, contentResult.rows);
+}
+
 export const AllCourses = async (
   req: Request,
   res: Response,
@@ -40,11 +83,7 @@ export const AllCourses = async (
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        slug: subdomain,
-      },
-    });
+    const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
       res.status(400).json({
@@ -53,20 +92,28 @@ export const AllCourses = async (
       return;
     }
 
-    const courses = await prisma.course.findMany({
-      where: {
-        instructorId: instructor.id,
-      },
-    });
-
-    if (!courses) {
-      res.status(404).json({ message: "No courses found" });
-      return;
-    }
+    const coursesResult = await query<CourseRow>(
+      SQL.course.findByInstructorSlug,
+      [instructor.id],
+    );
 
     res.status(200).json({
       message: "Courses fetched successfully",
-      courses,
+      courses: coursesResult.rows.map((course) => ({
+        id: course.id,
+        instructorId: course.instructor_id,
+        title: course.title,
+        description: course.description,
+        price: course.price,
+        thumbnailUrl: course.thumbnail_url,
+        level: course.level,
+        type: course.type,
+        startDate: course.start_date,
+        endDate: course.end_date,
+        status: course.status,
+        createdAt: course.created_at,
+        updatedAt: course.updated_at,
+      })),
     });
   } catch (err) {
     console.log(err);
@@ -74,24 +121,9 @@ export const AllCourses = async (
   }
 };
 
-// Get a single course
 export const GetCourse = async (req: Request, res: Response): Promise<void> => {
-  const courseId = req.params.id;
-
   try {
-    const course = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-      },
-      // Include folders and their contents so students can browse course material
-      include: {
-        courseFolders: {
-          include: {
-            courseContents: true,
-          },
-        },
-      },
-    });
+    const course = await getCourseDetails(getFirstParam(req.params.id));
 
     if (!course) {
       res.status(400).json({
@@ -109,11 +141,9 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
-// Delete a course folder and all its S3 files, then cascade-delete DB rows
 export const DeleteFolder = async (
   req: Request,
   res: Response,
@@ -121,31 +151,30 @@ export const DeleteFolder = async (
   const { folderId } = req.params;
 
   try {
-    // Fetch folder with its contents so we can delete S3 files
-    const folder = await prisma.courseFolder.findUnique({
-      where: { id: folderId },
-      include: {
-        course: true,
-        courseContents: true, // need URLs to delete from S3
-      },
-    });
+    const folderResult = await query<FolderOwnershipRow>(
+      SQL.course.getFolderOwnership,
+      [folderId],
+    );
+    const folder = folderResult.rows[0];
 
     if (!folder) {
       res.status(404).json({ message: "Folder not found!" });
       return;
     }
 
-    if (folder.course.instructorId !== req.instructorId) {
+    if (folder.instructor_id !== req.instructorId) {
       res.status(403).json({ message: "Unauthorized" });
       return;
     }
 
-    // Batch-delete all content files from S3 in one API call
-    const fileUrls = folder.courseContents.map((c) => c.url);
-    await deleteMultipleFiles(fileUrls);
+    const contentsResult = await query<CourseContentRow>(
+      SQL.course.getContentsByFolderId,
+      [folderId],
+    );
+    const fileUrls = contentsResult.rows.map((content) => content.url);
 
-    // Prisma cascade (onDelete: Cascade) removes courseContent rows automatically
-    await prisma.courseFolder.delete({ where: { id: folderId } });
+    await deleteMultipleFiles(fileUrls);
+    await query(SQL.course.deleteFolderById, [folderId]);
 
     res.status(200).json({
       message: `Folder deleted with ${fileUrls.length} file(s) removed from storage.`,
@@ -156,7 +185,6 @@ export const DeleteFolder = async (
   }
 };
 
-// Delete a single course content item (video or notes)
 export const DeleteContent = async (
   req: Request,
   res: Response,
@@ -164,31 +192,24 @@ export const DeleteContent = async (
   const { contentId } = req.params;
 
   try {
-    // Ensure the content belongs to a course owned by this instructor
-    const content = await prisma.courseContent.findUnique({
-      where: { id: contentId },
-      include: {
-        courseFolder: {
-          include: { course: true },
-        },
-      },
-    });
+    const contentResult = await query<ContentOwnershipRow>(
+      SQL.course.getContentOwnership,
+      [contentId],
+    );
+    const content = contentResult.rows[0];
 
     if (!content) {
       res.status(404).json({ message: "Content not found!" });
       return;
     }
 
-    if (content.courseFolder.course.instructorId !== req.instructorId) {
+    if (content.instructor_id !== req.instructorId) {
       res.status(403).json({ message: "Unauthorized" });
       return;
     }
 
-    // Delete the file from S3 first, then remove the DB record.
-    // deleteFile is fire-and-forget safe — it won't throw if S3 cleanup fails.
     await deleteFile(content.url);
-
-    await prisma.courseContent.delete({ where: { id: contentId } });
+    await query(SQL.course.deleteContentById, [contentId]);
 
     res.status(200).json({ message: "Content deleted successfully!" });
   } catch (error) {
@@ -197,8 +218,6 @@ export const DeleteContent = async (
   }
 };
 
-// Reorder content items within a folder.
-// Accepts an ordered array of contentIds; assigns position = array index.
 export const ReorderContent = async (
   req: Request,
   res: Response,
@@ -212,31 +231,47 @@ export const ReorderContent = async (
   }
 
   try {
-    // Verify the folder belongs to this instructor
-    const folder = await prisma.courseFolder.findUnique({
-      where: { id: folderId },
-      include: { course: true },
-    });
+    const folderResult = await query<FolderOwnershipRow>(
+      SQL.course.getFolderOwnership,
+      [folderId],
+    );
+    const folder = folderResult.rows[0];
 
     if (!folder) {
       res.status(404).json({ message: "Folder not found!" });
       return;
     }
 
-    if (folder.course.instructorId !== req.instructorId) {
+    if (folder.instructor_id !== req.instructorId) {
       res.status(403).json({ message: "Unauthorized" });
       return;
     }
 
-    // Update each item's position in a single transaction
-    await prisma.$transaction(
-      orderedIds.map((id, index) =>
-        prisma.courseContent.update({
-          where: { id },
-          data: { position: index },
-        }),
-      ),
-    );
+    await withTransaction(async (client) => {
+      const existingRows = await client.query<{ id: string }>(
+        SQL.course.getContentIdsByFolderId,
+        [folderId],
+      );
+
+      if (existingRows.rows.length !== orderedIds.length) {
+        throw new Error("orderedIds length mismatch");
+      }
+
+      const existingIds = new Set(existingRows.rows.map((row) => row.id));
+      for (const orderedId of orderedIds) {
+        if (!existingIds.has(orderedId)) {
+          throw new Error("orderedIds contains invalid content id");
+        }
+      }
+
+      for (let index = 0; index < orderedIds.length; index += 1) {
+        await client.query(SQL.course.updateContentPosition, [
+          index,
+          orderedIds[index],
+          folderId,
+        ]);
+      }
+    });
 
     res.status(200).json({ message: "Content reordered successfully!" });
   } catch (error) {
@@ -245,7 +280,6 @@ export const ReorderContent = async (
   }
 };
 
-// Create a folder
 export const CreateFolder = async (
   req: Request,
   res: Response,
@@ -264,11 +298,7 @@ export const CreateFolder = async (
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        id: req.instructorId,
-      },
-    });
+    const instructor = await getInstructorById(req.instructorId);
 
     if (!instructor) {
       res.status(400).json({
@@ -277,49 +307,52 @@ export const CreateFolder = async (
       return;
     }
 
-    // Ensure the specific course exists and belongs to this instructor
-    const course = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-        instructorId: instructor.id,
-      },
-    });
+    const courseResult = await query<CourseRow>(SQL.course.findById, [
+      courseId,
+    ]);
+    const course = courseResult.rows[0];
 
-    if (!course) {
+    if (!course || course.instructor_id !== instructor.id) {
       res.status(404).json({ message: "Course not found or unauthorized" });
       return;
     }
 
-    const folderPresent = await prisma.courseFolder.findFirst({
-      where: {
-        courseId,
-        name: parsedData.data.name,
-      },
-    });
+    const folderPresentResult = await query<CourseFolderRow>(
+      SQL.course.findFolderByCourseAndName,
+      [courseId, parsedData.data.name],
+    );
 
-    if (folderPresent) {
+    if (folderPresentResult.rows[0]) {
       res.status(400).json({
         message: "Folder with similar name already exists",
       });
       return;
     }
 
-    const folder = await prisma.courseFolder.create({
-      data: {
-        name: parsedData.data.name,
-        courseId: courseId,
+    const folderResult = await query<CourseFolderRow>(SQL.course.createFolder, [
+      nanoid(),
+      parsedData.data.name,
+      courseId,
+    ]);
+    const folder = folderResult.rows[0];
+
+    res.json({
+      message: "Folder created successfully",
+      folder: {
+        id: folder.id,
+        name: folder.name,
+        courseId: folder.course_id,
+        createdAt: folder.created_at,
+        updatedAt: folder.updated_at,
       },
     });
-
-    res.json({ message: "Folder created successfully", folder });
   } catch (err) {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-// Upload video
 export const UploadVideo = async (
-  req: CustomRequest,
+  req: CourseControllerRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -336,29 +369,24 @@ export const UploadVideo = async (
       return;
     }
 
-    const course = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-      },
-    });
+    const [courseResult, folderResult] = await Promise.all([
+      query<CourseRow>(SQL.course.findById, [courseId]),
+      query<CourseFolderRow>(SQL.course.findFolderById, [folderId]),
+    ]);
+
+    const course = courseResult.rows[0];
+    const folder = folderResult.rows[0];
 
     if (!course) {
       res.status(404).json({ message: "Course not found" });
       return;
     }
 
-    const folder = await prisma.courseFolder.findUnique({
-      where: {
-        id: folderId,
-      },
-    });
-
     if (!folder) {
       res.status(404).json({ message: "Folder not found" });
       return;
     }
 
-    // Determine the correct MIME type so S3 serves the file correctly in browsers
     const mimeType =
       type === "NOTES" ? "application/pdf" : video.mimetype || "video/mp4";
 
@@ -371,18 +399,24 @@ export const UploadVideo = async (
       mimeType,
     );
 
-    const videoEntry = await prisma.courseContent.create({
-      data: {
-        name: name,
-        url: result.videoUrl,
-        type: type,
-        courseFolderId: folderId,
-      },
-    });
+    const contentResult = await query<CourseContentRow>(
+      SQL.course.createContent,
+      [nanoid(), name, type, result.videoUrl, folderId],
+    );
+    const content = contentResult.rows[0];
 
     res.status(200).json({
       message: "Video uploaded successfully",
-      video: videoEntry,
+      video: {
+        id: content.id,
+        name: content.name,
+        type: content.type,
+        url: content.url,
+        position: content.position,
+        courseFolderId: content.course_folder_id,
+        createdAt: content.created_at,
+        updatedAt: content.updated_at,
+      },
       result,
     });
   } catch (error) {
@@ -391,17 +425,15 @@ export const UploadVideo = async (
   }
 };
 
-// List folder contents
 export const ListFolderContents = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
     const { courseId, folderName } = req.params;
-    // const { folderName } = req.query;
 
     const sanitizedFolderName = path
-      .normalize(folderName)
+      .normalize(getFirstParam(folderName))
       .replace(/^(\.\.(\/|\\|$))+/, "");
     const prefix = `${req.instructorId}/${courseId}/${sanitizedFolderName}`;
 
@@ -414,7 +446,7 @@ export const ListFolderContents = async (
     const data = await s3Client.send(new ListObjectsV2Command(params));
 
     const folders = (data.CommonPrefixes || []).map(
-      (prefix) => prefix.Prefix!.split("/").slice(-2)[0],
+      (commonPrefix) => commonPrefix.Prefix!.split("/").slice(-2)[0],
     );
 
     const files = (data.Contents || [])
@@ -440,9 +472,8 @@ export const ListFolderContents = async (
   }
 };
 
-// Purchase Course
 export const EnrollInCourse = async (
-  req: CustomRequest,
+  req: CourseControllerRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -453,11 +484,7 @@ export const EnrollInCourse = async (
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        slug: subdomain,
-      },
-    });
+    const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
       res.status(400).json({
@@ -466,22 +493,18 @@ export const EnrollInCourse = async (
       return;
     }
 
-    const course = await prisma.course.findUnique({
-      where: {
-        id: req.params.courseId,
-      },
-    });
+    const [courseResult, studentResult] = await Promise.all([
+      query<CourseRow>(SQL.course.findById, [req.params.courseId]),
+      query<StudentRow>(SQL.student.findById, [req.studentId!]),
+    ]);
+
+    const course = courseResult.rows[0];
+    const student = studentResult.rows[0];
 
     if (!course) {
       res.status(404).json({ message: "Course not found" });
       return;
     }
-
-    const student = await prisma.student.findUnique({
-      where: {
-        id: req.studentId,
-      },
-    });
 
     if (!student) {
       res.status(404).json({ message: "Student not found" });
@@ -502,21 +525,28 @@ export const EnrollInCourse = async (
     req.courseId = course.id;
     req.orderId = order.id;
 
+    await query<PaymentRow>(SQL.payment.createOrder, [
+      nanoid(),
+      student.id,
+      course.id,
+      course.price,
+      "INR",
+      order.id,
+    ]);
+
     res.status(200).json({
       success: true,
       courseId: course.id,
       order,
     });
-    return;
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal Server Error" });
-    return;
   }
 };
 
 export const CapturePayment = async (
-  req: CustomRequest,
+  req: CourseControllerRequest,
   res: Response,
 ): Promise<void> => {
   try {
@@ -526,10 +556,6 @@ export const CapturePayment = async (
       razorpay_signature,
       courseId,
     } = req.body;
-
-    console.log("BODY:", req.body);
-    console.log("studentId:", req.studentId);
-    console.log("courseId:", courseId);
 
     if (
       !razorpay_payment_id ||
@@ -553,7 +579,6 @@ export const CapturePayment = async (
     }
 
     const body = razorpay_order_id + "|" + razorpay_payment_id;
-
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
       .update(body)
@@ -592,40 +617,43 @@ export const CapturePayment = async (
       return;
     }
 
-    // Transaction: check for existing enrollment and create atomically.
-    // Prevents duplicate enrollments even if two requests arrive at the same time.
-    const enrollment = await prisma.$transaction(async (tx) => {
-      const existing = await tx.enrollment.findFirst({
-        where: {
-          studentId: req.studentId!,
-          courseId: courseId,
-        },
-      });
+    const existingEnrollmentResult = await query<EnrollmentRow>(
+      SQL.student.getEnrollment,
+      [req.studentId, courseId],
+    );
+    const existingEnrollment = existingEnrollmentResult.rows[0];
 
-      if (existing) return existing;
+    const enrollment = await withTransaction(async (client) => {
+      await client.query(SQL.payment.markSuccess, [
+        razorpay_order_id,
+        razorpay_payment_id,
+      ]);
 
-      return await tx.enrollment.create({
-        data: {
-          studentId: req.studentId!,
-          courseId: courseId,
-        },
-      });
+      if (existingEnrollment) {
+        return existingEnrollment;
+      }
+
+      const enrollmentResult = await client.query<EnrollmentRow>(
+        SQL.payment.createEnrollment,
+        [nanoid(), req.studentId!, courseId],
+      );
+
+      return enrollmentResult.rows[0];
     });
-
-    const alreadyEnrolled =
-      enrollment.studentId === req.studentId &&
-      enrollment.courseId === courseId;
 
     res.json({
       success: true,
-      message: alreadyEnrolled
+      message: existingEnrollment
         ? "Already enrolled"
         : "Payment successful & enrollment created",
-      enrollment,
+      enrollment: toEnrollmentPayload(enrollment),
     });
-    return;
   } catch (error: any) {
     console.error("Capture Payment Error:", error);
+
+    if (req.body?.razorpay_order_id) {
+      await query(SQL.payment.markFailed, [req.body.razorpay_order_id]);
+    }
 
     if (error?.error?.description === "Payment already captured") {
       res.json({
@@ -639,6 +667,5 @@ export const CapturePayment = async (
       success: false,
       message: "Error capturing payment",
     });
-    return;
   }
 };

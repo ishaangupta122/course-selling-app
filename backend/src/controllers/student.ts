@@ -1,13 +1,26 @@
 import { Request, Response } from "express";
-import prisma from "../prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { nanoid } from "nanoid";
+import { query } from "../db";
+import {
+  toEnrollmentPayload,
+  toStudentEnrollmentCoursePayload,
+  toStudentPayload,
+} from "../helper/dbMappers";
+import { extractSubdomain } from "../helper/subdomainHelper";
+import {
+  EnrollmentRow,
+  InstructorRow,
+  StudentEnrollmentCourseRow,
+  StudentRow,
+} from "../helper/types";
 import {
   SignInSchema,
   StudentSignUpSchema,
   UpdateStudentSchema,
 } from "../zod/validator";
-import { extractSubdomain } from "../helper/subdomainHelper";
+import { SQL } from "../helper/queries";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -15,7 +28,11 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in environment variables.");
 }
 
-// Signup
+async function getInstructorBySlug(slug: string) {
+  const result = await query<InstructorRow>(SQL.instructor.findBySlug, [slug]);
+  return result.rows[0] ?? null;
+}
+
 export const Signup = async (req: Request, res: Response): Promise<void> => {
   const parsedData = StudentSignUpSchema.safeParse(req.body);
 
@@ -34,11 +51,7 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        slug: subdomain,
-      },
-    });
+    const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
       res.status(400).json({
@@ -49,14 +62,11 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
 
     const hashedPassword = await bcrypt.hash(parsedData.data.password, 10);
 
-    const existingStudent = await prisma.student.findUnique({
-      where: {
-        email_instructorId: {
-          email: parsedData.data.email,
-          instructorId: instructor.id,
-        },
-      },
-    });
+    const existingStudentResult = await query<StudentRow>(
+      SQL.student.findByEmailAndInstructor,
+      [parsedData.data.email, instructor.id],
+    );
+    const existingStudent = existingStudentResult.rows[0];
 
     if (existingStudent) {
       res.status(400).json({
@@ -65,14 +75,14 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const student = await prisma.student.create({
-      data: {
-        name: parsedData.data.name,
-        email: parsedData.data?.email,
-        password: hashedPassword,
-        instructorId: instructor?.id,
-      },
-    });
+    const studentResult = await query<StudentRow>(SQL.student.create, [
+      nanoid(),
+      parsedData.data.name,
+      parsedData.data.email,
+      hashedPassword,
+      instructor.id,
+    ]);
+    const student = studentResult.rows[0];
 
     const token = jwt.sign(
       { studentId: student.id, role: "student" },
@@ -91,17 +101,14 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
       studentId: student.id,
       token,
     });
-    return;
   } catch (error) {
     console.log(error);
     res.status(500).json({
       message: "Internal Server Error",
     });
-    return;
   }
 };
 
-// Signin
 export const Signin = async (req: Request, res: Response): Promise<void> => {
   const parsedData = SignInSchema.safeParse(req.body);
 
@@ -120,11 +127,7 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        slug: subdomain,
-      },
-    });
+    const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
       res.status(400).json({
@@ -133,12 +136,11 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const student = await prisma.student.findFirst({
-      where: {
-        email: parsedData.data.email,
-        instructorId: instructor?.id,
-      },
-    });
+    const studentResult = await query<StudentRow>(SQL.student.findByEmailAndInstructor, [
+      parsedData.data.email,
+      instructor.id,
+    ]);
+    const student = studentResult.rows[0];
 
     if (!student) {
       res.status(400).json({
@@ -170,17 +172,14 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
       studentId: student.id,
       token,
     });
-    return;
   } catch (error) {
     console.log(error);
     res.status(500).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
-// Update Profile
 export const UpdateProfile = async (
   req: Request,
   res: Response,
@@ -195,37 +194,27 @@ export const UpdateProfile = async (
   }
 
   try {
-    const student = await prisma.student.findUnique({
-      where: {
-        id: req.studentId,
-      },
-    });
+    const studentResult = await query<StudentRow>(SQL.student.findById, [req.studentId!]);
+    const student = studentResult.rows[0];
 
     if (!student) {
       res.status(404).json({ message: "Student not found" });
       return;
     }
 
-    const updatedStudent = await prisma.student.update({
-      where: {
-        id: req.studentId,
-      },
-      data: {
-        name: parsedData.data.name,
-        email: parsedData.data.email,
-      },
-    });
+    const updatedStudentResult = await query<StudentRow>(SQL.student.updateProfile, [
+      req.studentId!,
+      parsedData.data.name ?? null,
+      parsedData.data.email ?? null,
+    ]);
 
-    res.status(200).json(updatedStudent);
-    return;
+    res.status(200).json(updatedStudentResult.rows[0]);
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal Server Error" });
-    return;
   }
 };
 
-// Get Profile
 export const GetProfile = async (
   req: Request,
   res: Response,
@@ -238,11 +227,7 @@ export const GetProfile = async (
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        slug: subdomain,
-      },
-    });
+    const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
       res.status(400).json({
@@ -251,28 +236,24 @@ export const GetProfile = async (
       return;
     }
 
-    const student = await prisma.student.findUnique({
-      where: {
-        id: req.studentId,
-        instructorId: instructor.id,
-      },
-    });
+    const studentResult = await query<StudentRow>(SQL.student.getProfileByInstructor, [
+      req.studentId!,
+      instructor.id,
+    ]);
+    const student = studentResult.rows[0];
 
     if (!student) {
       res.status(404).json({ message: "Student not found" });
       return;
     }
 
-    res.status(200).json(student);
-    return;
+    res.status(200).json(toStudentPayload(student));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal Server Error" });
-    return;
   }
 };
 
-// Get All Enrolled Courses
 export const getEnrolledCourses = async (
   req: Request,
   res: Response,
@@ -285,11 +266,7 @@ export const getEnrolledCourses = async (
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        slug: subdomain,
-      },
-    });
+    const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
       res.status(400).json({
@@ -298,37 +275,21 @@ export const getEnrolledCourses = async (
       return;
     }
 
-    const enrollments = await prisma.student.findMany({
-      where: {
-        id: req.studentId,
-      },
-      select: {
-        enrollments: {
-          where: {
-            course: {
-              instructorId: instructor.id,
-            },
-          },
-          include: {
-            course: true,
-          },
-        },
-      },
-    });
+    const enrollmentsResult = await query<StudentEnrollmentCourseRow>(
+      SQL.student.getEnrollmentsByInstructor,
+      [req.studentId!, instructor.id],
+    );
 
     res.status(200).json({
       message: "All Enrolled Courses",
-      enrollments,
+      enrollments: [{ enrollments: enrollmentsResult.rows.map(toStudentEnrollmentCoursePayload) }],
     });
-    return;
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal Server Error" });
-    return;
   }
 };
 
-// Get Enrolled Course
 export const getEnrolledCourse = async (
   req: Request,
   res: Response,
@@ -341,11 +302,7 @@ export const getEnrolledCourse = async (
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        slug: subdomain,
-      },
-    });
+    const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
       res.status(400).json({
@@ -354,12 +311,11 @@ export const getEnrolledCourse = async (
       return;
     }
 
-    const enrollment = await prisma.enrollment.findFirst({
-      where: {
-        studentId: req.studentId,
-        courseId: req.params.courseId,
-      },
-    });
+    const enrollmentResult = await query<EnrollmentRow>(SQL.student.getEnrollment, [
+      req.studentId!,
+      req.params.courseId,
+    ]);
+    const enrollment = enrollmentResult.rows[0];
 
     if (!enrollment) {
       res.status(404).json({ message: "Course not found" });
@@ -368,13 +324,11 @@ export const getEnrolledCourse = async (
 
     res.status(200).json({
       message: "Enrolled Course",
-      enrollment,
+      enrollment: toEnrollmentPayload(enrollment),
     });
-    return;
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal Server Error" });
-    return;
   }
 };
 
@@ -383,26 +337,14 @@ export const CheckEnrollment = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const studentId = req.studentId;
-    const { courseId } = req.params;
+    const enrollmentResult = await query<EnrollmentRow>(SQL.student.getEnrollment, [
+      req.studentId!,
+      req.params.courseId,
+    ]);
 
-    const enrollment = await prisma.enrollment.findFirst({
-      where: {
-        studentId: studentId,
-        courseId: courseId,
-      },
-    });
-
-    if (enrollment) {
-      res.status(200).json({ enrolled: true });
-      return;
-    } else {
-      res.status(200).json({ enrolled: false });
-      return;
-    }
+    res.status(200).json({ enrolled: Boolean(enrollmentResult.rows[0]) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal Server Error" });
-    return;
   }
 };

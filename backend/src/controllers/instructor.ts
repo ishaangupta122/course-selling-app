@@ -1,21 +1,38 @@
 import { Request, Response } from "express";
-import prisma from "../prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { nanoid } from "nanoid";
+import { query } from "../db";
+import {
+  buildCourseWithFolders,
+  toCoursePayload,
+  toCourseWithCountPayload,
+  toInstructorPayload,
+  toStudentPayload,
+} from "../helper/dbMappers";
+import { extractSubdomain } from "../helper/subdomainHelper";
+import { deleteMultipleFiles } from "../helper/aws";
+import {
+  CourseRow,
+  CourseWithEnrollmentCountRow,
+  CourseFolderRow,
+  CourseContentRow,
+  InstructorRow,
+  StudentRow,
+} from "../helper/types";
 import {
   SignInSchema,
   InstructorSignUpSchema,
   CourseSchema,
 } from "../zod/validator";
-import { extractSubdomain } from "../helper/subdomainHelper";
-import { deleteMultipleFiles } from "../helper/aws";
+import { SQL } from "../helper/queries";
 
 function generateSlug(organization: string): string {
   return organization
     .toLowerCase()
     .trim()
-    .replace(/[\s]+/g, "-") // Replace spaces with hyphens
-    .replace(/[^a-z0-9-]/g, ""); // Remove non-alphanumeric characters
+    .replace(/[\s]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -24,20 +41,56 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in environment variables.");
 }
 
-// Get Instructor Students
+function getFirstParam(param: string | string[]) {
+  return Array.isArray(param) ? param[0] : param;
+}
+
+async function getInstructorById(instructorId: string) {
+  const result = await query<InstructorRow>(SQL.instructor.findById, [
+    instructorId,
+  ]);
+  return result.rows[0] ?? null;
+}
+
+async function getInstructorByEmail(email: string) {
+  const result = await query<InstructorRow>(SQL.instructor.findByEmail, [
+    email,
+  ]);
+  return result.rows[0] ?? null;
+}
+
+async function getCourseDetails(courseId: string, instructorId?: string) {
+  const courseResult = instructorId
+    ? await query<CourseRow>(SQL.course.findByInstructor, [
+        courseId,
+        instructorId,
+      ])
+    : await query<CourseRow>(SQL.course.findById, [courseId]);
+  const course = courseResult.rows[0];
+
+  if (!course) {
+    return null;
+  }
+
+  const [folderResult, contentResult] = await Promise.all([
+    query<CourseFolderRow>(SQL.course.getFoldersByCourseId, [courseId]),
+    query<CourseContentRow>(SQL.course.getContentsByCourseId, [courseId]),
+  ]);
+
+  return buildCourseWithFolders(course, folderResult.rows, contentResult.rows);
+}
+
 export const getInstructorStudents = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        id: req.instructorId,
-      },
-      include: {
-        students: true,
-      },
-    });
+    const [instructorResult, studentsResult] = await Promise.all([
+      query<InstructorRow>(SQL.instructor.findById, [req.instructorId!]),
+      query<StudentRow>(SQL.instructor.getStudents, [req.instructorId!]),
+    ]);
+
+    const instructor = instructorResult.rows[0];
 
     if (!instructor) {
       res.status(400).json({
@@ -46,17 +99,21 @@ export const getInstructorStudents = async (
       return;
     }
 
+    const students = studentsResult.rows.map(toStudentPayload);
+
     res.status(200).json({
       message: "Students fetched successfully!",
-      instructor,
-      students: instructor?.students,
+      instructor: {
+        ...toInstructorPayload(instructor),
+        students,
+      },
+      students,
     });
   } catch (error) {
     console.log(error);
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
@@ -72,11 +129,7 @@ export const getInstructor = async (
       return;
     }
 
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        id: req.instructorId,
-      },
-    });
+    const instructor = await getInstructorById(req.instructorId!);
 
     if (!instructor) {
       res.status(400).json({ message: "Instructor not found" });
@@ -85,18 +138,16 @@ export const getInstructor = async (
 
     res.status(200).json({
       message: "Instructor fetched successfully!",
-      instructor,
+      instructor: toInstructorPayload(instructor),
     });
   } catch (error) {
     console.log(error);
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
-// Signup
 export const Signup = async (req: Request, res: Response): Promise<void> => {
   const parsedData = InstructorSignUpSchema.safeParse(req.body);
 
@@ -110,12 +161,9 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
   try {
     const hashedPassword = await bcrypt.hash(parsedData.data.password, 10);
     const slug = generateSlug(parsedData.data.organization);
-
-    const existingInstructor = await prisma.instructor.findUnique({
-      where: {
-        email: parsedData.data.email,
-      },
-    });
+    const existingInstructor = await getInstructorByEmail(
+      parsedData.data.email,
+    );
 
     if (existingInstructor) {
       res.status(400).json({
@@ -124,15 +172,15 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const instructor = await prisma.instructor.create({
-      data: {
-        name: parsedData.data.name,
-        email: parsedData.data?.email,
-        password: hashedPassword,
-        organization: parsedData.data.organization,
-        slug: slug,
-      },
-    });
+    const instructorResult = await query<InstructorRow>(SQL.instructor.create, [
+      nanoid(),
+      parsedData.data.name,
+      parsedData.data.email,
+      hashedPassword,
+      parsedData.data.organization,
+      slug,
+    ]);
+    const instructor = instructorResult.rows[0];
 
     const token = jwt.sign(
       { instructorId: instructor.id, role: "instructor" },
@@ -150,9 +198,8 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
       message: "Signed up Successfully!",
       instructorId: instructor.id,
       token,
-      instructor,
+      instructor: toInstructorPayload(instructor),
     });
-    return;
   } catch (error) {
     console.log(error);
     res.status(400).json({
@@ -161,7 +208,6 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// Signin
 export const Signin = async (req: Request, res: Response): Promise<void> => {
   const parsedData = SignInSchema.safeParse(req.body);
 
@@ -173,15 +219,25 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        email: parsedData.data.email,
-      },
-    });
+    const instructor = await getInstructorByEmail(parsedData.data.email);
 
     if (!instructor) {
       res.status(400).json({
         message: "Instructor not found!",
+      });
+      return;
+    }
+
+    if (instructor.status === "BLOCKED") {
+      res.status(403).json({
+        message: "Instructor account is blocked",
+      });
+      return;
+    }
+
+    if (instructor.status === "PENDING") {
+      res.status(403).json({
+        message: "Instructor account is pending approval",
       });
       return;
     }
@@ -204,15 +260,15 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
       JWT_SECRET!,
     );
 
-    instructor.password = "";
-
     res.status(200).json({
       message: "Signed in Successfully!",
       instructorId: instructor.id,
       token,
-      instructor: instructor,
+      instructor: {
+        ...toInstructorPayload(instructor),
+        password: "",
+      },
     });
-    return;
   } catch (error) {
     console.log(error);
     res.status(400).json({
@@ -221,7 +277,6 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// Add Course
 export const AddCourse = async (req: Request, res: Response): Promise<void> => {
   const parsedData = CourseSchema.safeParse(req.body);
 
@@ -241,41 +296,31 @@ export const AddCourse = async (req: Request, res: Response): Promise<void> => {
     : null;
 
   try {
-    const course = await prisma.course.create({
-      data: {
-        title: parsedData.data.title,
-        description: parsedData.data.description,
-        price: parsedData.data.price,
-        thumbnailUrl: parsedData.data.thumbnailUrl,
-        level: parsedData.data.level,
-        type: parsedData.data.type,
-        startDate: parsedStartDate,
-        endDate: parsedEndDate,
-        instructorId: req.instructorId!,
-      },
-    });
-
-    if (!course) {
-      res.status(400).json({
-        message: "Failed to add course!",
-      });
-      return;
-    }
+    const courseResult = await query<CourseRow>(SQL.course.create, [
+      nanoid(),
+      req.instructorId!,
+      parsedData.data.title,
+      parsedData.data.description,
+      parsedData.data.price,
+      parsedData.data.thumbnailUrl,
+      parsedData.data.level ?? null,
+      parsedData.data.type ?? null,
+      parsedStartDate,
+      parsedEndDate,
+    ]);
 
     res.status(200).json({
       message: "Course added successfully!",
-      course,
+      course: toCoursePayload(courseResult.rows[0]),
     });
   } catch (error) {
     console.log(error);
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
-// Update Course
 export const UpdateCourse = async (
   req: Request,
   res: Response,
@@ -298,21 +343,19 @@ export const UpdateCourse = async (
     : null;
 
   try {
-    const course = await prisma.course.update({
-      where: {
-        id: courseId,
-        instructorId: req.instructorId,
-      },
-      data: {
-        title: parsedData.data.title,
-        description: parsedData.data.description,
-        price: parsedData.data.price,
-        thumbnailUrl: parsedData.data.thumbnailUrl,
-        level: parsedData.data.level,
-        startDate: parsedStartDate,
-        endDate: parsedEndDate,
-      },
-    });
+    const courseResult = await query<CourseRow>(SQL.course.updateByInstructor, [
+      courseId,
+      req.instructorId!,
+      parsedData.data.title,
+      parsedData.data.description,
+      parsedData.data.price,
+      parsedData.data.thumbnailUrl,
+      parsedData.data.level ?? null,
+      parsedData.data.type ?? null,
+      parsedStartDate,
+      parsedEndDate,
+    ]);
+    const course = courseResult.rows[0];
 
     if (!course) {
       res.status(400).json({
@@ -323,38 +366,22 @@ export const UpdateCourse = async (
 
     res.status(200).json({
       message: "Course updated successfully!",
-      course,
+      course: toCoursePayload(course),
     });
   } catch (error) {
     console.log(error);
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
-// Get All Courses
 export const GetCourses = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
-    const instructor = await prisma.instructor.findUnique({
-      where: {
-        id: req.instructorId,
-      },
-      include: {
-        // Include enrollment count per course so the dashboard can calculate revenue
-        courses: {
-          include: {
-            _count: {
-              select: { enrollments: true },
-            },
-          },
-        },
-      },
-    });
+    const instructor = await getInstructorById(req.instructorId!);
 
     if (!instructor) {
       res.status(400).json({
@@ -363,39 +390,29 @@ export const GetCourses = async (
       return;
     }
 
+    const coursesResult = await query<CourseWithEnrollmentCountRow>(
+      SQL.course.getByInstructorWithCounts,
+      [req.instructorId!],
+    );
+
     res.status(200).json({
       message: "Courses fetched successfully!",
-      courses: instructor?.courses,
+      courses: coursesResult.rows.map(toCourseWithCountPayload),
     });
   } catch (error) {
     console.log(error);
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
-// Get Single Course
 export const GetCourse = async (req: Request, res: Response): Promise<void> => {
-  const courseId = req.params.id;
-  const instructorId = req.instructorId;
-
   try {
-    const course = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-        instructorId: instructorId,
-      },
-      // Include folder contents so the manage-course page can show videos/notes
-      include: {
-        courseFolders: {
-          include: {
-            courseContents: true,
-          },
-        },
-      },
-    });
+    const course = await getCourseDetails(
+      getFirstParam(req.params.id),
+      req.instructorId!,
+    );
 
     if (!course) {
       res.status(400).json({
@@ -413,46 +430,33 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };
 
-// Delete Course — removes all S3 files for every folder/content item, then deletes DB record
 export const DeleteCourse = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
-  const courseId = req.params.id;
-  const instructorId = req.instructorId;
-
   try {
-    // Fetch all content URLs across all folders so we can clean up S3
-    const course = await prisma.course.findUnique({
-      where: { id: courseId, instructorId: instructorId },
-      include: {
-        courseFolders: {
-          include: { courseContents: true },
-        },
-      },
-    });
+    const course = await getCourseDetails(
+      getFirstParam(req.params.id),
+      req.instructorId!,
+    );
 
     if (!course) {
       res.status(404).json({ message: "Course not found!" });
       return;
     }
 
-    // Collect every file URL in the course
     const fileUrls = course.courseFolders.flatMap((folder) =>
-      folder.courseContents.map((c) => c.url),
+      folder.courseContents.map((content) => content.url),
     );
 
-    // Batch-delete all files from S3 in one call (cascade handles DB rows)
     await deleteMultipleFiles(fileUrls);
-
-    // Delete the course — Prisma cascade removes folders + contents automatically
-    await prisma.course.delete({
-      where: { id: courseId, instructorId: instructorId },
-    });
+    await query(SQL.course.deleteByInstructor, [
+      req.params.id,
+      req.instructorId!,
+    ]);
 
     res.status(200).json({
       message: `Course deleted with ${fileUrls.length} file(s) removed from storage.`,
@@ -462,6 +466,5 @@ export const DeleteCourse = async (
     res.status(400).json({
       message: "Something went wrong!",
     });
-    return;
   }
 };

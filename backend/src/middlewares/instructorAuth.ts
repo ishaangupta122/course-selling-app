@@ -1,11 +1,14 @@
 import { NextFunction, Request, Response } from "express";
 import jwt, { TokenExpiredError } from "jsonwebtoken";
+import { query } from "../db";
+import { InstructorRow } from "../helper/types";
+import { SQL } from "../helper/queries";
 
-const instructorAuthMiddleware = (
+const instructorAuthMiddleware = async (
   req: Request,
   res: Response,
   next: NextFunction,
-): void => {
+): Promise<void> => {
   const JWT_SECRET = process.env.JWT_SECRET as string;
 
   if (!JWT_SECRET) {
@@ -25,7 +28,6 @@ const instructorAuthMiddleware = (
       return;
     }
 
-    // Verify the token
     const decoded = jwt.verify(token, JWT_SECRET) as {
       instructorId: string;
       role: string;
@@ -41,7 +43,19 @@ const instructorAuthMiddleware = (
     req.instructorId = decoded.instructorId;
     req.role = "instructor";
 
-    return next();
+    const instructorResult = await query<InstructorRow>(SQL.instructor.findById, [
+      decoded.instructorId,
+    ]);
+    const instructor = instructorResult.rows[0];
+
+    if (!instructor || instructor.status !== "ACTIVE") {
+      res.status(403).json({
+        message: "Instructor account is not active",
+      });
+      return;
+    }
+
+    next();
   } catch (err) {
     if (err instanceof TokenExpiredError) {
       res.status(401).json({
@@ -49,11 +63,11 @@ const instructorAuthMiddleware = (
       });
       return;
     }
+
     console.error(err);
     res.status(401).json({
       message: "Unauthorized",
     });
-    return;
   }
 };
 

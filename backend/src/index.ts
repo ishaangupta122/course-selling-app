@@ -5,6 +5,7 @@ import studentRouter from "./routes/student";
 import adminRouter from "./routes/admin";
 import instructorRouter from "./routes/instructor";
 import courseRouter from "./routes/course";
+import { connectDb } from "./db";
 
 const app = express();
 const PORT = process.env.PORT;
@@ -34,6 +35,13 @@ app.post("/logout", (req, res) => {
   res.status(200).json({ message: "Logged out successfully" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port: ${PORT}`);
-});
+connectDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port: ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error(`PostgreSQL connection failed: ${error}`);
+    process.exit(1);
+  });

@@ -1,14 +1,11 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import prisma from "../prisma";
-
-export interface CustomRequest extends Request {
-  instructor?: any;
-  studentId?: string;
-}
+import { query } from "../db";
+import { InstructorRow, StudentAuthRequest } from "../helper/types";
+import { SQL } from "../helper/queries";
 
 export const checkSlug = async (
-  req: CustomRequest,
+  req: StudentAuthRequest,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
@@ -20,11 +17,10 @@ export const checkSlug = async (
     return;
   }
 
-  const instructor = await prisma.instructor.findUnique({
-    where: {
-      slug: subdomain,
-    },
-  });
+  const instructorResult = await query<InstructorRow>(SQL.instructor.findBySlug, [
+    subdomain,
+  ]);
+  const instructor = instructorResult.rows[0] ?? null;
 
   req.instructor = instructor;
 
@@ -62,7 +58,6 @@ const studentAuthMiddleware = (
       return;
     }
 
-    // Verify the token
     const decoded = jwt.verify(token, JWT_SECRET) as {
       studentId: string;
       role: string;
@@ -78,13 +73,12 @@ const studentAuthMiddleware = (
     req.studentId = decoded.studentId;
     req.role = "student";
 
-    return next();
+    next();
   } catch (err) {
     console.log(err);
     res.status(401).json({
       message: "Unauthorized",
     });
-    return;
   }
 };
 
