@@ -1,8 +1,5 @@
 import { NextFunction, Request, Response } from "express";
 import jwt, { TokenExpiredError } from "jsonwebtoken";
-import { query } from "../db";
-import { InstructorRow } from "../helper/types";
-import { SQL } from "../helper/queries";
 
 const instructorAuthMiddleware = async (
   req: Request,
@@ -42,18 +39,6 @@ const instructorAuthMiddleware = async (
 
     req.instructorId = decoded.instructorId;
     req.role = "instructor";
-
-    const instructorResult = await query<InstructorRow>(SQL.instructor.findById, [
-      decoded.instructorId,
-    ]);
-    const instructor = instructorResult.rows[0];
-
-    if (!instructor || instructor.status !== "ACTIVE") {
-      res.status(403).json({
-        message: "Instructor account is not active",
-      });
-      return;
-    }
 
     next();
   } catch (err) {

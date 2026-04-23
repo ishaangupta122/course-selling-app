@@ -25,10 +25,15 @@ const Signup = () => {
       setEmail("");
       setPassword("");
       setOrganization("");
-      alert("Signed up successfully.");
+      alert(
+        "Account created! Your account is pending admin approval. You will be able to sign in once approved."
+      );
       navigate("/instructor/signin");
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      alert(
+        error?.response?.data?.message ?? "Signup failed. Please try again."
+      );
       setIsSubmitting(false);
     }
   };

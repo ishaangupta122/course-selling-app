@@ -7,9 +7,6 @@ export interface UploadResult {
   message: string;
 }
 
-export type InstructorStatus = "PENDING" | "ACTIVE" | "BLOCKED";
-export type CourseStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
-export type EnrollmentStatus = "ACTIVE" | "CANCELLED";
 export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED";
 
 export interface AdminRow {
@@ -26,12 +23,8 @@ export interface InstructorRow {
   name: string;
   email: string;
   password: string;
-  logo: string | null;
   organization: string;
   slug: string;
-  url: string | null;
-  description: string | null;
-  status: InstructorStatus;
   created_at: Date;
   updated_at: Date;
 }
@@ -41,9 +34,7 @@ export interface StudentRow {
   name: string;
   email: string;
   password: string;
-  avatar: string | null;
   instructor_id: string;
-  is_active: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -59,7 +50,6 @@ export interface CourseRow {
   type: string | null;
   start_date: Date | null;
   end_date: Date | null;
-  status: CourseStatus;
   created_at: Date;
   updated_at: Date;
 }
@@ -77,7 +67,6 @@ export interface CourseContentRow {
   name: string;
   type: string;
   url: string;
-  position: number;
   course_folder_id: string;
   created_at: Date;
   updated_at: Date;
@@ -87,7 +76,6 @@ export interface EnrollmentRow {
   id: string;
   student_id: string;
   course_id: string;
-  status: EnrollmentStatus;
   enrolled_at: Date;
   updated_at: Date;
 }
@@ -97,7 +85,6 @@ export interface PaymentRow {
   student_id: string;
   course_id: string;
   amount: number;
-  currency: string;
   razorpay_order_id: string;
   razorpay_payment_id: string | null;
   status: PaymentStatus;
@@ -111,12 +98,8 @@ export interface CourseFolderWithContents extends CourseFolderRow {
 
 export interface PlatformStatsRow {
   total_instructors: string;
-  active_instructors: string;
-  blocked_instructors: string;
-  pending_instructors: string;
   total_students: string;
   total_courses: string;
-  published_courses: string;
   total_revenue: string;
 }
 
@@ -141,7 +124,6 @@ export interface StudentEnrollmentCourseRow extends EnrollmentRow {
   course_type: string | null;
   course_start_date: Date | null;
   course_end_date: Date | null;
-  course_status: CourseStatus;
   course_created_at: Date;
   course_updated_at: Date;
   course_instructor_id: string;
@@ -220,4 +202,8 @@ export interface CourseControllerRequest extends Request {
 export interface StudentAuthRequest extends Request {
   instructor?: InstructorRow | null;
   studentId?: string;
+}
+
+export interface AdminAuthRequest extends Request {
+  adminId?: string;
 }

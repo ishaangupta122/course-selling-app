@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { API_URL } from "../config";
+import { getCourses } from "../api/courses";
 
 export interface Course {
   id: string;
@@ -20,16 +19,11 @@ export const useCourses = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchCourses = async () => {
-    const token = localStorage.getItem("token");
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${API_URL}/instructor/courses`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setCourses(response.data.courses);
+      const response = await getCourses();
+      setCourses(response.courses);
     } catch (err) {
       setError("Failed to fetch courses");
       console.error(err);

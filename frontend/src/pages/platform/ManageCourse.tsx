@@ -1,6 +1,4 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { API_URL } from "../../config";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import UpdateCourse from "../../components/instructor/UpdateCourse";
 import {
@@ -22,6 +20,7 @@ import { Course, CourseContent, CourseFolder } from "../../utils/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getCourse,
+  createCourseFolder,
   deleteCourseFolder,
   deleteCourseContent,
   deleteCourse,
@@ -50,7 +49,9 @@ const ContentViewer = ({
             <h2 className="font-semibold text-gray-900 text-base">
               {content.name}
             </h2>
-            <span className="text-xs text-gray-400 uppercase">{content.type}</span>
+            <span className="text-xs text-gray-400 uppercase">
+              {content.type}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -102,7 +103,7 @@ const ManageCourse = () => {
   const queryClient = useQueryClient();
 
   const { isLoading, error, refetch, data } = useQuery({
-    queryKey: ["courses"],
+    queryKey: ["course", courseId],
     queryFn: () => getCourse(courseId!),
   });
 
@@ -113,7 +114,9 @@ const ManageCourse = () => {
   const [expandedFolderId, setExpandedFolderId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingCourse, setDeletingCourse] = useState(false);
-  const [previewContent, setPreviewContent] = useState<CourseContent | null>(null);
+  const [previewContent, setPreviewContent] = useState<CourseContent | null>(
+    null,
+  );
   const [reordering, setReordering] = useState(false);
 
   useEffect(() => {
@@ -139,11 +142,7 @@ const ManageCourse = () => {
     e.preventDefault();
     try {
       setAddingFolder(true);
-      await axios.post(
-        `${API_URL}/course/createFolder/${courseId}`,
-        { name: folderName },
-        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } },
-      );
+      await createCourseFolder(courseId!, folderName);
       setFolderName("");
       setAddingFolder(false);
       await refetch();
@@ -154,7 +153,8 @@ const ManageCourse = () => {
   };
 
   const handleDeleteFolder = async (folder: CourseFolder) => {
-    if (!confirm(`Delete folder "${folder.name}" and all its contents?`)) return;
+    if (!confirm(`Delete folder "${folder.name}" and all its contents?`))
+      return;
     try {
       setDeletingId(folder.id);
       await deleteCourseFolder(folder.id);
@@ -206,7 +206,7 @@ const ManageCourse = () => {
   ) => {
     if (!folder.courseContents) return;
     const sorted = [...folder.courseContents].sort(
-      (a, b) => a.position - b.position,
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
     const idx = sorted.findIndex((c) => c.id === content.id);
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
@@ -215,17 +215,13 @@ const ManageCourse = () => {
     // Swap locally for instant UI feedback
     [sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]];
 
-    // Optimistically update local state
     setCourse((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         courseFolders: prev.courseFolders?.map((f) =>
           f.id === folder.id
-            ? {
-                ...f,
-                courseContents: sorted.map((c, i) => ({ ...c, position: i })),
-              }
+            ? { ...f, courseContents: sorted }
             : f,
         ),
       };
@@ -342,7 +338,9 @@ const ManageCourse = () => {
             <h2 className="text-xl font-bold text-gray-900 md:mb-0 mb-4">
               Course Content
             </h2>
-            <form className="flex items-center gap-3" onSubmit={handleAddFolder}>
+            <form
+              className="flex items-center gap-3"
+              onSubmit={handleAddFolder}>
               <input
                 type="text"
                 className="border border-gray-200 p-2 outline-none rounded-lg text-sm focus:border-gray-500 transition"
@@ -380,7 +378,7 @@ const ManageCourse = () => {
             <div className="space-y-3">
               {course.courseFolders.map((folder) => {
                 const sortedContents = [...(folder.courseContents ?? [])].sort(
-                  (a, b) => a.position - b.position,
+                  (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
                 );
                 const isExpanded = expandedFolderId === folder.id;
 
@@ -395,7 +393,10 @@ const ManageCourse = () => {
                         onClick={() =>
                           setExpandedFolderId(isExpanded ? null : folder.id)
                         }>
-                        <FolderOpen size={19} className="text-yellow-500 shrink-0" />
+                        <FolderOpen
+                          size={19}
+                          className="text-yellow-500 shrink-0"
+                        />
                         <span className="font-semibold text-gray-800 text-sm">
                           {folder.name}
                         </span>

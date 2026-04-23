@@ -1,25 +1,19 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaEnvelope, FaLock, FaEyeSlash, FaEye } from "react-icons/fa";
-import { useRecoilState } from "recoil";
-import { tokenState } from "../../atoms";
 import { useMutation } from "@tanstack/react-query";
-import { StudentSignin as Signin } from "../../api/auth";
+import { useAuth } from "../../hooks/useAuth";
 
 const StudentSignin = () => {
   const navigate = useNavigate();
-  // @ts-ignore
-  const [token, setToken] = useRecoilState(tokenState);
+  const { studentLogin } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () => Signin(email, password),
-    onSuccess: (data) => {
-      localStorage.setItem("token", data);
-      setToken(data);
-      alert("Signed in successfully.");
+    mutationFn: () => studentLogin(email, password),
+    onSuccess: () => {
       navigate("/");
     },
     onError: () => {

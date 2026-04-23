@@ -1,19 +1,17 @@
 import { useEffect, useState } from "react";
 import { Upload, Folder, CheckCircle, AlertCircle } from "lucide-react";
-import { getCourse } from "../../api/courses";
+import { getCourse, uploadCourseContent } from "../../api/courses";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "react-router-dom";
 import { Error, Loading } from "../../components/LoadingError";
 import { Course } from "../../utils/types";
-import { API_URL } from "../../config";
-import axios from "axios";
 import { ArrowLeft } from "lucide-react";
 
 const AddVideo = () => {
   const { courseId } = useParams();
 
   const { isLoading, error, data, refetch } = useQuery({
-    queryKey: ["courses"],
+    queryKey: ["course", courseId],
     queryFn: () => getCourse(courseId!),
   });
 
@@ -70,48 +68,25 @@ const AddVideo = () => {
     setUploadProgress(0);
     setStatus("idle");
 
-    const formData = new FormData();
-    // The multer field name must stay "video" (backend expects this key)
-    formData.append("video", selectedFile);
-    formData.append("name", name.trim());
-    formData.append("type", type);
-    formData.append("courseId", courseId!);
-    formData.append("folderId", currentFolder);
-
     try {
-      const response = await axios.post(
-        `${API_URL}/course/uploadVideo`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const progress = Math.round(
-                (progressEvent.loaded / progressEvent.total) * 100,
-              );
-              setUploadProgress(progress);
-            }
-          },
-        },
-      );
+      await uploadCourseContent({
+        file: selectedFile,
+        name: name.trim(),
+        type,
+        courseId: courseId!,
+        folderId: currentFolder,
+        onUploadProgress: (progress) => setUploadProgress(progress),
+      });
 
-      if (response.status === 200) {
-        setStatus("success");
-        setMessage(
-          `${type === "VIDEO" ? "Video" : "Notes"} uploaded successfully!`,
-        );
-        setSelectedFile(null);
-        setName("");
-        setUploadProgress(100);
-        // Refresh folder list so new item shows immediately
-        refetch();
-      } else {
-        setStatus("error");
-        setMessage("Upload failed. Please try again.");
-      }
+      setStatus("success");
+      setMessage(
+        `${type === "VIDEO" ? "Video" : "Notes"} uploaded successfully!`,
+      );
+      setSelectedFile(null);
+      setName("");
+      setUploadProgress(100);
+      // Refresh folder list so new item shows immediately
+      refetch();
     } catch (error) {
       setStatus("error");
       setMessage("Upload failed. Please check your connection and try again.");
@@ -213,7 +188,9 @@ const AddVideo = () => {
               type="text"
               className="w-full p-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-gray-800 transition"
               placeholder={
-                isNotes ? "e.g. Week 1 Lecture Notes" : "e.g. Introduction to the Course"
+                isNotes
+                  ? "e.g. Week 1 Lecture Notes"
+                  : "e.g. Introduction to the Course"
               }
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -309,7 +286,9 @@ const AddVideo = () => {
           {/* Upload Button */}
           <button
             onClick={uploadFile}
-            disabled={!selectedFile || !currentFolder || !name.trim() || uploading}
+            disabled={
+              !selectedFile || !currentFolder || !name.trim() || uploading
+            }
             className={`w-full py-3 rounded-xl font-semibold text-sm transition ${
               !selectedFile || !currentFolder || !name.trim() || uploading
                 ? "bg-gray-100 text-gray-400 cursor-not-allowed"

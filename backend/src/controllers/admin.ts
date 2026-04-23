@@ -4,11 +4,21 @@ import jwt from "jsonwebtoken";
 import { nanoid } from "nanoid";
 import { query } from "../db";
 import {
+  toAdminPayload,
   toInstructorPayload,
   toPlatformStatsPayload,
+  toStudentPayload,
 } from "../helper/dbMappers";
-import { AdminRow, InstructorRow, PlatformStatsRow } from "../helper/types";
+import {
+  AdminAuthRequest,
+  AdminRow,
+  InstructorRow,
+  PlatformStatsRow,
+  StudentRow,
+} from "../helper/types";
 import { SQL } from "../helper/queries";
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
 
 export const Signup = async (req: Request, res: Response) => {
   const { name, email, password } = req.body;
@@ -23,9 +33,7 @@ export const Signup = async (req: Request, res: Response) => {
     const existingAdmin = existingAdminResult.rows[0];
 
     if (existingAdmin) {
-      res.status(400).json({
-        message: "Admin already exists!",
-      });
+      res.status(400).json({ message: "Admin already exists!" });
       return;
     }
 
@@ -40,9 +48,7 @@ export const Signup = async (req: Request, res: Response) => {
     const token = jwt.sign({ adminId: admin.id, role: "admin" }, JWT_SECRET!);
 
     if (!token) {
-      res.status(500).json({
-        message: "Something went wrong!",
-      });
+      res.status(500).json({ message: "Something went wrong!" });
       return;
     }
 
@@ -53,9 +59,7 @@ export const Signup = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({
-      message: "Internal Server Error",
-    });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -68,27 +72,21 @@ export const Signin = async (req: Request, res: Response) => {
     const admin = adminResult.rows[0];
 
     if (!admin) {
-      res.status(404).json({
-        message: "Admin not found!",
-      });
+      res.status(404).json({ message: "Admin not found!" });
       return;
     }
 
     const isMatch = await bcrypt.compare(password, admin.password);
 
     if (!isMatch) {
-      res.status(400).json({
-        message: "Invalid Credentials!",
-      });
+      res.status(400).json({ message: "Invalid Credentials!" });
       return;
     }
 
     const token = jwt.sign({ adminId: admin.id, role: "admin" }, JWT_SECRET!);
 
     if (!token) {
-      res.status(500).json({
-        message: "Something went wrong!",
-      });
+      res.status(500).json({ message: "Something went wrong!" });
       return;
     }
 
@@ -99,39 +97,27 @@ export const Signin = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({
-      message: "Internal Server Error",
-    });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-async function updateInstructorStatus(
-  instructorId: string,
-  status: "ACTIVE" | "BLOCKED",
-) {
-  const instructorResult = await query<InstructorRow>(
-    SQL.admin.setInstructorStatus,
-    [instructorId, status],
-  );
+// ─── Profile ─────────────────────────────────────────────────────────────────
 
-  return instructorResult.rows[0] ?? null;
-}
-
-export const ApproveInstructor = async (req: Request, res: Response) => {
+export const GetProfile = async (req: AdminAuthRequest, res: Response) => {
   try {
-    const instructorId = Array.isArray(req.params.instructorId)
-      ? req.params.instructorId[0]
-      : req.params.instructorId;
-    const instructor = await updateInstructorStatus(instructorId, "ACTIVE");
+    const adminResult = await query<AdminRow>(SQL.admin.findById, [
+      req.adminId,
+    ]);
+    const admin = adminResult.rows[0];
 
-    if (!instructor) {
-      res.status(404).json({ message: "Instructor not found!" });
+    if (!admin) {
+      res.status(404).json({ message: "Admin not found!" });
       return;
     }
 
     res.status(200).json({
-      message: "Instructor approved successfully!",
-      instructor: toInstructorPayload(instructor),
+      message: "Profile fetched successfully!",
+      admin: toAdminPayload(admin),
     });
   } catch (error) {
     console.log(error);
@@ -139,21 +125,30 @@ export const ApproveInstructor = async (req: Request, res: Response) => {
   }
 };
 
-export const BlockInstructor = async (req: Request, res: Response) => {
-  try {
-    const instructorId = Array.isArray(req.params.instructorId)
-      ? req.params.instructorId[0]
-      : req.params.instructorId;
-    const instructor = await updateInstructorStatus(instructorId, "BLOCKED");
+export const UpdateProfile = async (req: AdminAuthRequest, res: Response) => {
+  const { name, password } = req.body;
 
-    if (!instructor) {
-      res.status(404).json({ message: "Instructor not found!" });
+  try {
+    let hashedPassword: string | undefined;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    const adminResult = await query<AdminRow>(SQL.admin.updateProfile, [
+      req.adminId,
+      name ?? null,
+      hashedPassword ?? null,
+    ]);
+    const admin = adminResult.rows[0];
+
+    if (!admin) {
+      res.status(404).json({ message: "Admin not found!" });
       return;
     }
 
     res.status(200).json({
-      message: "Instructor blocked successfully!",
-      instructor: toInstructorPayload(instructor),
+      message: "Profile updated successfully!",
+      admin: toAdminPayload(admin),
     });
   } catch (error) {
     console.log(error);
@@ -161,27 +156,61 @@ export const BlockInstructor = async (req: Request, res: Response) => {
   }
 };
 
-export const UnblockInstructor = async (req: Request, res: Response) => {
+// ─── Instructors ──────────────────────────────────────────────────────────────
+
+export const GetAllInstructors = async (req: Request, res: Response) => {
   try {
-    const instructorId = Array.isArray(req.params.instructorId)
-      ? req.params.instructorId[0]
-      : req.params.instructorId;
-    const instructor = await updateInstructorStatus(instructorId, "ACTIVE");
-
-    if (!instructor) {
-      res.status(404).json({ message: "Instructor not found!" });
-      return;
-    }
-
+    const result = await query<InstructorRow>(SQL.admin.getAllInstructors);
     res.status(200).json({
-      message: "Instructor unblocked successfully!",
-      instructor: toInstructorPayload(instructor),
+      message: "Instructors fetched successfully!",
+      instructors: result.rows.map(toInstructorPayload),
     });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+export const DeleteInstructor = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    await query(SQL.admin.deleteInstructor, [id]);
+    res.status(200).json({ message: "Instructor deleted successfully!" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// ─── Students ────────────────────────────────────────────────────────────────
+
+export const GetAllStudents = async (req: Request, res: Response) => {
+  try {
+    const result = await query<StudentRow>(SQL.admin.getAllStudents);
+    res.status(200).json({
+      message: "Students fetched successfully!",
+      students: result.rows.map(toStudentPayload),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const DeleteStudent = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    await query(SQL.admin.deleteStudent, [id]);
+    res.status(200).json({ message: "Student deleted successfully!" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// ─── Platform Stats ───────────────────────────────────────────────────────────
 
 export const GetPlatformStats = async (req: Request, res: Response) => {
   try {

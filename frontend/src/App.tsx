@@ -19,6 +19,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AddVideo from "./pages/platform/AddVideo";
 import StudentCourseViewer from "./pages/instructor/StudentCourseViewer";
 import StudentProfile from "./pages/instructor/StudentProfile";
+import AdminSignin from "./pages/admin/AdminSignin";
+import AdminSignup from "./pages/admin/AdminSignup";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminProfile from "./pages/admin/AdminProfile";
 
 const queryClient = new QueryClient();
 
@@ -32,7 +36,7 @@ const MainRoutes = () => {
         <Route
           path="/instructor/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
               <Dashboard />
             </ProtectedRoute>
           }
@@ -40,7 +44,7 @@ const MainRoutes = () => {
         <Route
           path="/instructor/dashboard/course/:courseId"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
               <ManageCourse />
             </ProtectedRoute>
           }
@@ -48,7 +52,7 @@ const MainRoutes = () => {
         <Route
           path="/instructor/profile"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
               <Profile />
             </ProtectedRoute>
           }
@@ -56,8 +60,28 @@ const MainRoutes = () => {
         <Route
           path="/instructor/dashboard/course/:courseId/add"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
               <AddVideo />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Admin routes — outside of any layout, full-page */}
+        <Route path="/admin/signin" element={<AdminSignin />} />
+        <Route path="/admin/signup" element={<AdminSignup />} />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]} redirectTo="/admin/signin">
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]} redirectTo="/admin/signin">
+              <AdminProfile />
             </ProtectedRoute>
           }
         />
@@ -77,7 +101,7 @@ const TenantRoutes = () => {
         <Route
           path="/enrolled-courses"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["student"]} redirectTo="/signin">
               <EnrolledCourses />
             </ProtectedRoute>
           }
@@ -86,7 +110,7 @@ const TenantRoutes = () => {
         <Route
           path="/enrolled-courses/:courseId"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["student"]} redirectTo="/signin">
               <StudentCourseViewer />
             </ProtectedRoute>
           }
@@ -94,7 +118,7 @@ const TenantRoutes = () => {
         <Route
           path="/profile"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["student"]} redirectTo="/signin">
               <StudentProfile />
             </ProtectedRoute>
           }

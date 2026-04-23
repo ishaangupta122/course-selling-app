@@ -20,12 +20,12 @@ const Signin = () => {
       setIsSubmitting(false);
       setEmail("");
       setPassword("");
-      alert("Signed in successfully.");
       navigate(`/instructor/dashboard`);
-      // window.open('http://test.localhost:5173/dashboard', '_self');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Invalid email or password.");
+      alert(
+        error?.response?.data?.message ?? "Invalid email or password."
+      );
       setIsSubmitting(false);
     }
   };

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import ClickAwayListener from "react-click-away-listener";
 import { X } from "lucide-react";
-import axios from "axios";
-import { API_URL } from "../../config";
+import { createCourse } from "../../api/courses";
 
 interface AddCourseProps {
   handleClickAway: () => void;
@@ -23,8 +22,6 @@ const AddCourse = ({ handleClickAway }: AddCourseProps) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const token = localStorage.getItem("token");
-
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice)) {
       alert("Invalid price");
@@ -32,26 +29,16 @@ const AddCourse = ({ handleClickAway }: AddCourseProps) => {
       return;
     }
 
-    await axios
-      .post(
-        `${API_URL}/instructor/course`,
-        {
-          title,
-          description,
-          price: parsedPrice,
-          thumbnailUrl,
-          level,
-          type,
-          startDate,
-          endDate,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
+    await createCourse({
+      title,
+      description,
+      price: parsedPrice,
+      thumbnailUrl,
+      level,
+      type,
+      startDate,
+      endDate,
+    })
       .then(() => {
         setIsSubmitting(false);
         // setTitle('');

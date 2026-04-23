@@ -1,35 +1,53 @@
-import axios from "axios";
-import { API_URL } from "../config";
+import { apiClient } from "./client";
+import { AuthResponse, StudentAuthResponse } from "../utils/types";
 
-export const StudentSignup = async (
-  name: string,
-  email: string,
-  password: string,
-): Promise<void> => {
-  try {
-    await axios.post(`${API_URL}/student/signup`, {
-      name,
-      email,
-      password,
-    });
-  } catch (error) {
-    console.error("Error signing up", error);
-    throw error;
-  }
+// ─── Instructor Auth ──────────────────────────────────────────────────────────
+
+export const instructorSignup = async (payload: {
+  name: string;
+  email: string;
+  password: string;
+  organization: string;
+}) => {
+  const { data } = await apiClient.post<AuthResponse>(
+    "/instructor/signup",
+    payload,
+  );
+  return data;
 };
 
-export const StudentSignin = async (
-  email: string,
-  password: string,
-): Promise<string> => {
-  try {
-    const response = await axios.post(`${API_URL}/student/signin`, {
-      email,
-      password,
-    });
-    return response.data.token;
-  } catch (error) {
-    console.error("Error signing in", error);
-    throw error;
-  }
+export const instructorSignin = async (payload: {
+  email: string;
+  password: string;
+}) => {
+  const { data } = await apiClient.post<AuthResponse>(
+    "/instructor/signin",
+    payload,
+  );
+  return data;
+};
+
+// ─── Student Auth ─────────────────────────────────────────────────────────────
+
+export const studentSignup = async (payload: {
+  name: string;
+  email: string;
+  password: string;
+}) => {
+  const { data } = await apiClient.post<StudentAuthResponse>(
+    "/student/signup",
+    payload,
+  );
+  return data;
+};
+
+export const studentSignin = async (payload: {
+  email: string;
+  password: string;
+}) => {
+  const { data } = await apiClient.post<StudentAuthResponse>(
+    "/student/signin",
+    payload,
+  );
+  return data;
 };

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FaUser, FaEnvelope, FaLock, FaEyeSlash, FaEye } from "react-icons/fa";
 import { useMutation } from "@tanstack/react-query";
-import { StudentSignup as Signup } from "../../api/auth";
+import { studentSignup } from "../../api/auth";
 
 const StudentSignup = () => {
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ const StudentSignup = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () => Signup(name, email, password),
+    mutationFn: () => studentSignup({ name, email, password }),
     onSuccess: () => {
       alert("Signed up successfully.");
       navigate("/signin");

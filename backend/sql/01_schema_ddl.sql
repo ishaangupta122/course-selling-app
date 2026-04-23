@@ -1,6 +1,5 @@
 -- 01_schema_ddl.sql
 -- Run this file first.
--- It creates all tables, constraints, and indexes for the project.
 
 DROP TABLE IF EXISTS payments CASCADE;
 DROP TABLE IF EXISTS enrollments CASCADE;
@@ -25,13 +24,8 @@ CREATE TABLE instructors (
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,
-  logo TEXT,
   organization TEXT NOT NULL UNIQUE,
   slug TEXT NOT NULL UNIQUE,
-  url TEXT UNIQUE,
-  description TEXT,
-  status TEXT NOT NULL DEFAULT 'PENDING'
-    CHECK (status IN ('PENDING', 'ACTIVE', 'BLOCKED')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -41,9 +35,7 @@ CREATE TABLE students (
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   password TEXT NOT NULL,
-  avatar TEXT,
   instructor_id TEXT NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (email, instructor_id)
@@ -58,8 +50,6 @@ CREATE TABLE courses (
   thumbnail_url TEXT NOT NULL,
   level TEXT CHECK (level IN ('BEGINNER', 'INTERMEDIATE', 'ADVANCED')),
   type TEXT CHECK (type IN ('LIVE', 'RECORDED')),
-  status TEXT NOT NULL DEFAULT 'DRAFT'
-    CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')),
   start_date TIMESTAMPTZ,
   end_date TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -81,7 +71,6 @@ CREATE TABLE course_contents (
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('VIDEO', 'NOTES')),
   url TEXT NOT NULL,
-  position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
   course_folder_id TEXT NOT NULL REFERENCES course_folders(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -91,8 +80,6 @@ CREATE TABLE enrollments (
   id TEXT PRIMARY KEY,
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'ACTIVE'
-    CHECK (status IN ('ACTIVE', 'CANCELLED')),
   enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (student_id, course_id)
@@ -103,7 +90,6 @@ CREATE TABLE payments (
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   amount INTEGER NOT NULL CHECK (amount >= 0),
-  currency TEXT NOT NULL DEFAULT 'INR',
   razorpay_order_id TEXT NOT NULL UNIQUE,
   razorpay_payment_id TEXT UNIQUE,
   status TEXT NOT NULL DEFAULT 'PENDING'
@@ -111,12 +97,3 @@ CREATE TABLE payments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX idx_students_instructor_id ON students(instructor_id);
-CREATE INDEX idx_courses_instructor_id ON courses(instructor_id);
-CREATE INDEX idx_course_folders_course_id ON course_folders(course_id);
-CREATE INDEX idx_course_contents_folder_id ON course_contents(course_folder_id);
-CREATE INDEX idx_enrollments_student_id ON enrollments(student_id);
-CREATE INDEX idx_enrollments_course_id ON enrollments(course_id);
-CREATE INDEX idx_payments_student_id ON payments(student_id);
-CREATE INDEX idx_payments_course_id ON payments(course_id);

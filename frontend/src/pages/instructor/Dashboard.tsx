@@ -32,9 +32,8 @@ const Dashboard = () => {
     }
   }, [data]);
 
-  // Total revenue = sum of (enrollments × price) for every course
   const totalRevenue = courses.reduce(
-    (sum, course) => sum + (course._count?.enrollments ?? 0) * course.price,
+    (sum, course) => sum + Number(course.enrollmentsCount ?? 0) * course.price,
     0,
   );
 
@@ -183,9 +182,9 @@ const Dashboard = () => {
                             {course.type}
                           </span>
                         )}
-                        {(course._count?.enrollments ?? 0) > 0 && (
+                        {Number(course.enrollmentsCount ?? 0) > 0 && (
                           <span className="bg-green-50 text-green-600 rounded-full px-2 py-0.5 text-xs font-medium">
-                            {course._count!.enrollments} enrolled
+                            {course.enrollmentsCount} enrolled
                           </span>
                         )}
                       </div>

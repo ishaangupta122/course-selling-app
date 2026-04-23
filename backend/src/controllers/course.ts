@@ -18,6 +18,7 @@ import { nanoid } from "nanoid";
 import { query, withTransaction } from "../db";
 import {
   buildCourseWithFolders,
+  toCoursePayload,
   toEnrollmentPayload,
 } from "../helper/dbMappers";
 import {
@@ -71,6 +72,8 @@ async function getCourseDetails(courseId: string) {
   return buildCourseWithFolders(course, folderResult.rows, contentResult.rows);
 }
 
+// ─── Public ───────────────────────────────────────────────────────────────────
+
 export const AllCourses = async (
   req: Request,
   res: Response,
@@ -86,9 +89,7 @@ export const AllCourses = async (
     const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
@@ -99,25 +100,11 @@ export const AllCourses = async (
 
     res.status(200).json({
       message: "Courses fetched successfully",
-      courses: coursesResult.rows.map((course) => ({
-        id: course.id,
-        instructorId: course.instructor_id,
-        title: course.title,
-        description: course.description,
-        price: course.price,
-        thumbnailUrl: course.thumbnail_url,
-        level: course.level,
-        type: course.type,
-        startDate: course.start_date,
-        endDate: course.end_date,
-        status: course.status,
-        createdAt: course.created_at,
-        updatedAt: course.updated_at,
-      })),
+      courses: coursesResult.rows.map(toCoursePayload),
     });
   } catch (err) {
     console.log(err);
-    res.status(500).send({ message: "Error while fetching courses" });
+    res.status(500).json({ message: "Error while fetching courses" });
   }
 };
 
@@ -126,9 +113,7 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
     const course = await getCourseDetails(getFirstParam(req.params.id));
 
     if (!course) {
-      res.status(400).json({
-        message: "Course not found!",
-      });
+      res.status(404).json({ message: "Course not found!" });
       return;
     }
 
@@ -138,9 +123,75 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
+    res.status(500).json({ message: "Something went wrong!" });
+  }
+};
+
+// ─── Instructor — Folders & Content ──────────────────────────────────────────
+
+export const CreateFolder = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const parsedData = CreateFolderSchema.safeParse(req.body);
+    const { courseId } = req.params;
+
+    if (!parsedData.success) {
+      res.status(400).json({ message: "Invalid inputs" });
+      return;
+    }
+
+    if (!req.instructorId) {
+      res.status(403).json({ message: "Unauthorized" });
+      return;
+    }
+
+    const instructor = await getInstructorById(req.instructorId);
+
+    if (!instructor) {
+      res.status(404).json({ message: "Instructor not found!" });
+      return;
+    }
+
+    const courseResult = await query<CourseRow>(SQL.course.findById, [courseId]);
+    const course = courseResult.rows[0];
+
+    if (!course || course.instructor_id !== instructor.id) {
+      res.status(404).json({ message: "Course not found or unauthorized" });
+      return;
+    }
+
+    const folderPresentResult = await query<CourseFolderRow>(
+      SQL.course.findFolderByCourseAndName,
+      [courseId, parsedData.data.name],
+    );
+
+    if (folderPresentResult.rows[0]) {
+      res.status(400).json({ message: "Folder with similar name already exists" });
+      return;
+    }
+
+    const folderResult = await query<CourseFolderRow>(SQL.course.createFolder, [
+      nanoid(),
+      parsedData.data.name,
+      courseId,
+    ]);
+    const folder = folderResult.rows[0];
+
+    res.status(200).json({
+      message: "Folder created successfully",
+      folder: {
+        id: folder.id,
+        name: folder.name,
+        courseId: folder.course_id,
+        createdAt: folder.created_at,
+        updatedAt: folder.updated_at,
+      },
     });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -218,139 +269,6 @@ export const DeleteContent = async (
   }
 };
 
-export const ReorderContent = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  const { folderId } = req.params;
-  const { orderedIds }: { orderedIds: string[] } = req.body;
-
-  if (!Array.isArray(orderedIds) || !orderedIds.length) {
-    res.status(400).json({ message: "orderedIds must be a non-empty array" });
-    return;
-  }
-
-  try {
-    const folderResult = await query<FolderOwnershipRow>(
-      SQL.course.getFolderOwnership,
-      [folderId],
-    );
-    const folder = folderResult.rows[0];
-
-    if (!folder) {
-      res.status(404).json({ message: "Folder not found!" });
-      return;
-    }
-
-    if (folder.instructor_id !== req.instructorId) {
-      res.status(403).json({ message: "Unauthorized" });
-      return;
-    }
-
-    await withTransaction(async (client) => {
-      const existingRows = await client.query<{ id: string }>(
-        SQL.course.getContentIdsByFolderId,
-        [folderId],
-      );
-
-      if (existingRows.rows.length !== orderedIds.length) {
-        throw new Error("orderedIds length mismatch");
-      }
-
-      const existingIds = new Set(existingRows.rows.map((row) => row.id));
-      for (const orderedId of orderedIds) {
-        if (!existingIds.has(orderedId)) {
-          throw new Error("orderedIds contains invalid content id");
-        }
-      }
-
-      for (let index = 0; index < orderedIds.length; index += 1) {
-        await client.query(SQL.course.updateContentPosition, [
-          index,
-          orderedIds[index],
-          folderId,
-        ]);
-      }
-    });
-
-    res.status(200).json({ message: "Content reordered successfully!" });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Something went wrong!" });
-  }
-};
-
-export const CreateFolder = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const parsedData = CreateFolderSchema.safeParse(req.body);
-    const { courseId } = req.params;
-
-    if (!parsedData.success) {
-      res.status(411).json({ msg: "Invalid inputs" });
-      return;
-    }
-
-    if (!req.instructorId) {
-      res.status(403).json({ message: "Unauthorized" });
-      return;
-    }
-
-    const instructor = await getInstructorById(req.instructorId);
-
-    if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
-      return;
-    }
-
-    const courseResult = await query<CourseRow>(SQL.course.findById, [
-      courseId,
-    ]);
-    const course = courseResult.rows[0];
-
-    if (!course || course.instructor_id !== instructor.id) {
-      res.status(404).json({ message: "Course not found or unauthorized" });
-      return;
-    }
-
-    const folderPresentResult = await query<CourseFolderRow>(
-      SQL.course.findFolderByCourseAndName,
-      [courseId, parsedData.data.name],
-    );
-
-    if (folderPresentResult.rows[0]) {
-      res.status(400).json({
-        message: "Folder with similar name already exists",
-      });
-      return;
-    }
-
-    const folderResult = await query<CourseFolderRow>(SQL.course.createFolder, [
-      nanoid(),
-      parsedData.data.name,
-      courseId,
-    ]);
-    const folder = folderResult.rows[0];
-
-    res.json({
-      message: "Folder created successfully",
-      folder: {
-        id: folder.id,
-        name: folder.name,
-        courseId: folder.course_id,
-        createdAt: folder.created_at,
-        updatedAt: folder.updated_at,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
 export const UploadVideo = async (
   req: CourseControllerRequest,
   res: Response,
@@ -412,7 +330,6 @@ export const UploadVideo = async (
         name: content.name,
         type: content.type,
         url: content.url,
-        position: content.position,
         courseFolderId: content.course_folder_id,
         createdAt: content.created_at,
         updatedAt: content.updated_at,
@@ -434,7 +351,7 @@ export const ListFolderContents = async (
 
     const sanitizedFolderName = path
       .normalize(getFirstParam(folderName))
-      .replace(/^(\.\.(\/|\\|$))+/, "");
+      .replace(/^(\.\.([/\\]|$))+/, "");
     const prefix = `${req.instructorId}/${courseId}/${sanitizedFolderName}`;
 
     const params: ListObjectsV2CommandInput = {
@@ -464,13 +381,11 @@ export const ListFolderContents = async (
     });
   } catch (error) {
     console.error("Error listing folder contents:", error);
-    throw new Error(
-      `Failed to list folder contents: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }`,
-    );
+    res.status(500).json({ message: "Error listing folder contents" });
   }
 };
+
+// ─── Student — Enrollment & Payment ──────────────────────────────────────────
 
 export const EnrollInCourse = async (
   req: CourseControllerRequest,
@@ -487,9 +402,7 @@ export const EnrollInCourse = async (
     const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
@@ -518,19 +431,19 @@ export const EnrollInCourse = async (
     });
 
     if (!order) {
-      res.status(400).json({ message: "Error while creating order" });
+      res.status(500).json({ message: "Error while creating order" });
       return;
     }
 
     req.courseId = course.id;
     req.orderId = order.id;
 
+    // payments table: (id, student_id, course_id, amount, razorpay_order_id, status)
     await query<PaymentRow>(SQL.payment.createOrder, [
       nanoid(),
       student.id,
       course.id,
       course.price,
-      "INR",
       order.id,
     ]);
 
@@ -571,10 +484,7 @@ export const CapturePayment = async (
     }
 
     if (!req.studentId) {
-      res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      res.status(401).json({ success: false, message: "Unauthorized" });
       return;
     }
 
@@ -595,10 +505,7 @@ export const CapturePayment = async (
     const payment = await razorpay.payments.fetch(razorpay_payment_id);
 
     if (!payment) {
-      res.status(400).json({
-        success: false,
-        message: "Payment not found",
-      });
+      res.status(400).json({ success: false, message: "Payment not found" });
       return;
     }
 
@@ -633,12 +540,13 @@ export const CapturePayment = async (
         return existingEnrollment;
       }
 
+      // enrollments table: (id, student_id, course_id)
       const enrollmentResult = await client.query<EnrollmentRow>(
         SQL.payment.createEnrollment,
         [nanoid(), req.studentId!, courseId],
       );
 
-      return enrollmentResult.rows[0];
+      return enrollmentResult.rows[0]!;
     });
 
     res.json({
@@ -656,10 +564,7 @@ export const CapturePayment = async (
     }
 
     if (error?.error?.description === "Payment already captured") {
-      res.json({
-        success: true,
-        message: "Payment already captured",
-      });
+      res.json({ success: true, message: "Payment already captured" });
       return;
     }
 
@@ -668,4 +573,17 @@ export const CapturePayment = async (
       message: "Error capturing payment",
     });
   }
+};
+
+// ─── Removed: ReorderContent ──────────────────────────────────────────────────
+// The course_contents table has no `position` column in the current schema.
+// Re-enable this endpoint after adding: ALTER TABLE course_contents ADD COLUMN position INTEGER DEFAULT 0;
+export const ReorderContent = async (
+  _req: Request,
+  res: Response,
+): Promise<void> => {
+  res.status(501).json({
+    message:
+      "ReorderContent is not available: the `position` column does not exist in course_contents. Add the column to enable this feature.",
+  });
 };

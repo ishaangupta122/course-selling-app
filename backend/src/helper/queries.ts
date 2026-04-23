@@ -3,19 +3,41 @@ export const SQL = {
     findByEmail: `
       SELECT * FROM admins WHERE email = $1 LIMIT 1
     `,
+    findById: `
+      SELECT * FROM admins WHERE id = $1 LIMIT 1
+    `,
     create: `
       INSERT INTO admins (id, name, email, password)
       VALUES ($1, $2, $3, $4)
       RETURNING *
     `,
-    setInstructorStatus: `
-      UPDATE instructors
-      SET status = $2
+    updateProfile: `
+      UPDATE admins
+      SET name     = COALESCE($2, name),
+          password = COALESCE($3, password)
       WHERE id = $1
       RETURNING *
     `,
+    getAllInstructors: `
+      SELECT * FROM instructors ORDER BY created_at DESC
+    `,
+    deleteInstructor: `
+      DELETE FROM instructors WHERE id = $1
+    `,
+    getAllStudents: `
+      SELECT * FROM students ORDER BY created_at DESC
+    `,
+    deleteStudent: `
+      DELETE FROM students WHERE id = $1
+    `,
     getPlatformStats: `
-      SELECT * FROM platform_stats_view LIMIT 1
+      SELECT
+        (SELECT COUNT(*) FROM instructors)::text AS total_instructors,
+        (SELECT COUNT(*) FROM students)::text    AS total_students,
+        (SELECT COUNT(*) FROM courses)::text     AS total_courses,
+        COALESCE(
+          (SELECT SUM(amount) FROM payments WHERE status = 'SUCCESS'), 0
+        )::text                                  AS total_revenue
     `,
   },
   instructor: {
@@ -29,14 +51,21 @@ export const SQL = {
       SELECT * FROM instructors WHERE slug = $1 LIMIT 1
     `,
     create: `
-      INSERT INTO instructors (id, name, email, password, organization, slug, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
+      INSERT INTO instructors (id, name, email, password, organization, slug)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `,
     getStudents: `
       SELECT * FROM students
       WHERE instructor_id = $1
       ORDER BY created_at DESC
+    `,
+    updateProfile: `
+      UPDATE instructors
+      SET name     = COALESCE($2, name),
+          password = COALESCE($3, password)
+      WHERE id = $1
+      RETURNING *
     `,
   },
   course: {
@@ -51,9 +80,8 @@ export const SQL = {
         level,
         type,
         start_date,
-        end_date,
-        status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'DRAFT')
+        end_date
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `,
     updateByInstructor: `
@@ -72,7 +100,7 @@ export const SQL = {
     getByInstructorWithCounts: `
       SELECT c.*, COUNT(e.id)::text AS enrollments_count
       FROM courses c
-      LEFT JOIN enrollments e ON e.course_id = c.id AND e.status = 'ACTIVE'
+      LEFT JOIN enrollments e ON e.course_id = c.id
       WHERE c.instructor_id = $1
       GROUP BY c.id
       ORDER BY c.created_at DESC
@@ -104,7 +132,7 @@ export const SQL = {
       FROM course_contents cc
       INNER JOIN course_folders cf ON cf.id = cc.course_folder_id
       WHERE cf.course_id = $1
-      ORDER BY cc.position ASC, cc.created_at ASC
+      ORDER BY cc.created_at ASC
     `,
     findFolderById: `
       SELECT * FROM course_folders WHERE id = $1 LIMIT 1
@@ -129,7 +157,7 @@ export const SQL = {
     getContentsByFolderId: `
       SELECT * FROM course_contents
       WHERE course_folder_id = $1
-      ORDER BY position ASC
+      ORDER BY created_at ASC
     `,
     deleteFolderById: `
       DELETE FROM course_folders WHERE id = $1
@@ -144,14 +172,6 @@ export const SQL = {
     `,
     deleteContentById: `
       DELETE FROM course_contents WHERE id = $1
-    `,
-    getContentIdsByFolderId: `
-      SELECT id FROM course_contents WHERE course_folder_id = $1
-    `,
-    updateContentPosition: `
-      UPDATE course_contents
-      SET position = $1
-      WHERE id = $2 AND course_folder_id = $3
     `,
     createContent: `
       INSERT INTO course_contents (id, name, type, url, course_folder_id)
@@ -175,8 +195,8 @@ export const SQL = {
     `,
     updateProfile: `
       UPDATE students
-      SET name = COALESCE($2, name),
-          email = COALESCE($3, email)
+      SET name     = COALESCE($2, name),
+          password = COALESCE($3, password)
       WHERE id = $1
       RETURNING *
     `,
@@ -198,7 +218,6 @@ export const SQL = {
              c.type AS course_type,
              c.start_date AS course_start_date,
              c.end_date AS course_end_date,
-             c.status AS course_status,
              c.created_at AS course_created_at,
              c.updated_at AS course_updated_at
       FROM enrollments e
@@ -219,10 +238,9 @@ export const SQL = {
         student_id,
         course_id,
         amount,
-        currency,
         razorpay_order_id,
         status
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
+      ) VALUES ($1, $2, $3, $4, $5, 'PENDING')
       RETURNING *
     `,
     markSuccess: `
@@ -232,8 +250,8 @@ export const SQL = {
       WHERE razorpay_order_id = $1
     `,
     createEnrollment: `
-      INSERT INTO enrollments (id, student_id, course_id, status)
-      VALUES ($1, $2, $3, 'ACTIVE')
+      INSERT INTO enrollments (id, student_id, course_id)
+      VALUES ($1, $2, $3)
       RETURNING *
     `,
     markFailed: `

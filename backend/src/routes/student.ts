@@ -12,17 +12,13 @@ import {
 
 const router = Router();
 
-// /student/signup
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 router.post("/signup", Signup);
-
-// /student/signin
 router.post("/signin", Signin);
 
-// update profile
-router.put("/profile", studentAuthMiddleware, UpdateProfile);
-
-// get profile
+// ─── Profile ──────────────────────────────────────────────────────────────────
 router.get("/profile", studentAuthMiddleware, GetProfile);
+router.put("/profile", studentAuthMiddleware, UpdateProfile);
 
 // All Enrolled Courses
 router.get("/courses", studentAuthMiddleware, getEnrolledCourses);

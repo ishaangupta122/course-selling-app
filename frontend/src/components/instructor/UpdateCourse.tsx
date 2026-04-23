@@ -1,10 +1,9 @@
 import { useState } from "react";
 import ClickAwayListener from "react-click-away-listener";
 import { X } from "lucide-react";
-import axios from "axios";
-import { API_URL } from "../../config";
 import { useParams } from "react-router-dom";
 import { Course } from "../../utils/types";
+import { updateCourse } from "../../api/courses";
 
 interface UpdateCourseProps {
   handleClickAway: () => void;
@@ -27,8 +26,6 @@ const UpdateCourse = ({ handleClickAway, course }: UpdateCourseProps) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const token = localStorage.getItem("token");
-
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice)) {
       alert("Invalid price");
@@ -36,26 +33,16 @@ const UpdateCourse = ({ handleClickAway, course }: UpdateCourseProps) => {
       return;
     }
 
-    await axios
-      .put(
-        `${API_URL}/instructor/course/${courseId}`,
-        {
-          title,
-          description,
-          price: parsedPrice,
-          thumbnailUrl,
-          level,
-          type,
-          startDate,
-          endDate,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
+    await updateCourse(courseId!, {
+      title,
+      description,
+      price: parsedPrice,
+      thumbnailUrl,
+      level,
+      type,
+      startDate,
+      endDate,
+    })
       .then(() => {
         setIsSubmitting(false);
         alert("Course updated successfully.");
@@ -127,7 +114,7 @@ const UpdateCourse = ({ handleClickAway, course }: UpdateCourseProps) => {
                     <select
                       className="w-full border outline-none rounded-md px-3 py-1"
                       value={level}
-                      onChange={(e) => setLevel(e.target.value)}>
+                      onChange={(e) => setLevel(e.target.value as "BEGINNER" | "INTERMEDIATE" | "ADVANCED")}>
                       <option value="" disabled>
                         Select
                       </option>
@@ -142,7 +129,7 @@ const UpdateCourse = ({ handleClickAway, course }: UpdateCourseProps) => {
                     <select
                       className="w-full border outline-none rounded-md px-3 py-1"
                       value={type}
-                      onChange={(e) => setType(e.target.value)}>
+                      onChange={(e) => setType(e.target.value as "LIVE" | "RECORDED")}>
                       <option value="" disabled>
                         Select
                       </option>

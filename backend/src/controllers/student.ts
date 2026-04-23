@@ -33,13 +33,13 @@ async function getInstructorBySlug(slug: string) {
   return result.rows[0] ?? null;
 }
 
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
 export const Signup = async (req: Request, res: Response): Promise<void> => {
   const parsedData = StudentSignUpSchema.safeParse(req.body);
 
   if (!parsedData.success) {
-    res.status(400).json({
-      message: "Invalid credentials",
-    });
+    res.status(400).json({ message: "Invalid credentials" });
     return;
   }
 
@@ -54,9 +54,7 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
     const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
@@ -66,12 +64,9 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
       SQL.student.findByEmailAndInstructor,
       [parsedData.data.email, instructor.id],
     );
-    const existingStudent = existingStudentResult.rows[0];
 
-    if (existingStudent) {
-      res.status(400).json({
-        message: "Student already exists!",
-      });
+    if (existingStudentResult.rows[0]) {
+      res.status(400).json({ message: "Student already exists!" });
       return;
     }
 
@@ -89,23 +84,15 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
       JWT_SECRET!,
     );
 
-    if (!token) {
-      res.status(500).json({
-        message: "Something went wrong!",
-      });
-      return;
-    }
-
     res.status(200).json({
       message: "Signed up Successfully!",
       studentId: student.id,
       token,
+      student: toStudentPayload(student),
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({
-      message: "Internal Server Error",
-    });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -113,9 +100,7 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
   const parsedData = SignInSchema.safeParse(req.body);
 
   if (!parsedData.success) {
-    res.status(400).json({
-      message: "Invalid credentials",
-    });
+    res.status(400).json({ message: "Invalid credentials" });
     return;
   }
 
@@ -130,22 +115,18 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
     const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
-    const studentResult = await query<StudentRow>(SQL.student.findByEmailAndInstructor, [
-      parsedData.data.email,
-      instructor.id,
-    ]);
+    const studentResult = await query<StudentRow>(
+      SQL.student.findByEmailAndInstructor,
+      [parsedData.data.email, instructor.id],
+    );
     const student = studentResult.rows[0];
 
     if (!student) {
-      res.status(400).json({
-        message: "Invalid credentials",
-      });
+      res.status(401).json({ message: "Invalid credentials" });
       return;
     }
 
@@ -160,10 +141,7 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
     }
 
     const token = jwt.sign(
-      {
-        studentId: student.id,
-        role: "student",
-      },
+      { studentId: student.id, role: "student" },
       JWT_SECRET!,
     );
 
@@ -171,12 +149,38 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
       message: "Signed in Successfully!",
       studentId: student.id,
       token,
+      student: toStudentPayload(student),
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({
-      message: "Something went wrong!",
+    res.status(500).json({ message: "Something went wrong!" });
+  }
+};
+
+// ─── Profile ─────────────────────────────────────────────────────────────────
+
+export const GetProfile = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const studentResult = await query<StudentRow>(SQL.student.findById, [
+      req.studentId!,
+    ]);
+    const student = studentResult.rows[0];
+
+    if (!student) {
+      res.status(404).json({ message: "Student not found" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Profile fetched successfully!",
+      student: toStudentPayload(student),
     });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -187,72 +191,38 @@ export const UpdateProfile = async (
   const parsedData = UpdateStudentSchema.safeParse(req.body);
 
   if (!parsedData.success) {
-    res.status(400).json({
-      message: "Invalid data",
-    });
+    res.status(400).json({ message: "Invalid data" });
     return;
   }
 
   try {
-    const studentResult = await query<StudentRow>(SQL.student.findById, [req.studentId!]);
-    const student = studentResult.rows[0];
+    let hashedPassword: string | undefined;
+    if (parsedData.data.password) {
+      hashedPassword = await bcrypt.hash(parsedData.data.password, 10);
+    }
+
+    const updatedStudentResult = await query<StudentRow>(
+      SQL.student.updateProfile,
+      [req.studentId!, parsedData.data.name ?? null, hashedPassword ?? null],
+    );
+    const student = updatedStudentResult.rows[0];
 
     if (!student) {
       res.status(404).json({ message: "Student not found" });
       return;
     }
 
-    const updatedStudentResult = await query<StudentRow>(SQL.student.updateProfile, [
-      req.studentId!,
-      parsedData.data.name ?? null,
-      parsedData.data.email ?? null,
-    ]);
-
-    res.status(200).json(updatedStudentResult.rows[0]);
+    res.status(200).json({
+      message: "Profile updated successfully!",
+      student: toStudentPayload(student),
+    });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-export const GetProfile = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const subdomain = extractSubdomain(req);
-
-    if (!subdomain) {
-      res.status(400).json({ message: "Invalid subdomain" });
-      return;
-    }
-
-    const instructor = await getInstructorBySlug(subdomain);
-
-    if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
-      return;
-    }
-
-    const studentResult = await query<StudentRow>(SQL.student.getProfileByInstructor, [
-      req.studentId!,
-      instructor.id,
-    ]);
-    const student = studentResult.rows[0];
-
-    if (!student) {
-      res.status(404).json({ message: "Student not found" });
-      return;
-    }
-
-    res.status(200).json(toStudentPayload(student));
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
-};
+// ─── Enrolled Courses ────────────────────────────────────────────────────────
 
 export const getEnrolledCourses = async (
   req: Request,
@@ -269,9 +239,7 @@ export const getEnrolledCourses = async (
     const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
@@ -282,7 +250,7 @@ export const getEnrolledCourses = async (
 
     res.status(200).json({
       message: "All Enrolled Courses",
-      enrollments: [{ enrollments: enrollmentsResult.rows.map(toStudentEnrollmentCoursePayload) }],
+      enrollments: enrollmentsResult.rows.map(toStudentEnrollmentCoursePayload),
     });
   } catch (error) {
     console.log(error);
@@ -305,20 +273,18 @@ export const getEnrolledCourse = async (
     const instructor = await getInstructorBySlug(subdomain);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
-    const enrollmentResult = await query<EnrollmentRow>(SQL.student.getEnrollment, [
-      req.studentId!,
-      req.params.courseId,
-    ]);
+    const enrollmentResult = await query<EnrollmentRow>(
+      SQL.student.getEnrollment,
+      [req.studentId!, req.params.courseId],
+    );
     const enrollment = enrollmentResult.rows[0];
 
     if (!enrollment) {
-      res.status(404).json({ message: "Course not found" });
+      res.status(404).json({ message: "Enrollment not found" });
       return;
     }
 
@@ -337,10 +303,10 @@ export const CheckEnrollment = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const enrollmentResult = await query<EnrollmentRow>(SQL.student.getEnrollment, [
-      req.studentId!,
-      req.params.courseId,
-    ]);
+    const enrollmentResult = await query<EnrollmentRow>(
+      SQL.student.getEnrollment,
+      [req.studentId!, req.params.courseId],
+    );
 
     res.status(200).json({ enrolled: Boolean(enrollmentResult.rows[0]) });
   } catch (error) {

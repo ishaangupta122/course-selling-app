@@ -1,40 +1,36 @@
 import { Router } from "express";
 import {
-  ApproveInstructor,
-  BlockInstructor,
+  DeleteInstructor,
+  DeleteStudent,
+  GetAllInstructors,
+  GetAllStudents,
   GetPlatformStats,
+  GetProfile,
   Signin,
   Signup,
-  UnblockInstructor,
+  UpdateProfile,
 } from "../controllers/admin";
 import adminAuthMiddleware from "../middlewares/adminAuth";
 
 const router = Router();
 
-// Signup
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 router.post("/signup", Signup);
-
-// Signin
 router.post("/signin", Signin);
 
-// Moderate instructor accounts
-router.patch(
-  "/instructors/:instructorId/approve",
-  adminAuthMiddleware,
-  ApproveInstructor,
-);
-router.patch(
-  "/instructors/:instructorId/block",
-  adminAuthMiddleware,
-  BlockInstructor,
-);
-router.patch(
-  "/instructors/:instructorId/unblock",
-  adminAuthMiddleware,
-  UnblockInstructor,
-);
+// ─── Profile ──────────────────────────────────────────────────────────────────
+router.get("/profile", adminAuthMiddleware, GetProfile);
+router.put("/profile", adminAuthMiddleware, UpdateProfile);
 
-// Platform stats
+// ─── Instructors ──────────────────────────────────────────────────────────────
+router.get("/instructors", adminAuthMiddleware, GetAllInstructors);
+router.delete("/instructors/:id", adminAuthMiddleware, DeleteInstructor);
+
+// ─── Students ─────────────────────────────────────────────────────────────────
+router.get("/students", adminAuthMiddleware, GetAllStudents);
+router.delete("/students/:id", adminAuthMiddleware, DeleteStudent);
+
+// ─── Platform Stats ───────────────────────────────────────────────────────────
 router.get("/stats", adminAuthMiddleware, GetPlatformStats);
 
 export default router;

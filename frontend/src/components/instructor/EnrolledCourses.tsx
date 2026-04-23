@@ -16,7 +16,9 @@ const EnrolledCourses = () => {
 
   useEffect(() => {
     if (data?.enrollments) {
-      setCourses(data.enrollments[0].enrollments.map((e: any) => e.course));
+      // Backend returns: { message, enrollments: [{ id, studentId, courseId, course: { id, title, ... } }] }
+      const mapped = (data.enrollments as any[]).map((e) => e.course).filter(Boolean);
+      setCourses(mapped);
     }
   }, [data]);
 

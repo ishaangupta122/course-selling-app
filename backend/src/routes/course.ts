@@ -19,11 +19,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
-// Public routes
+// ─── Public ───────────────────────────────────────────────────────────────────
 router.get("/", AllCourses);
 router.get("/:id", GetCourse);
 
-// Instructor routes
+// ─── Instructor — Folders & Content ──────────────────────────────────────────
 router.post("/createFolder/:courseId", instructorAuthMiddleware, CreateFolder);
 router.post(
   "/uploadVideo",
@@ -36,15 +36,13 @@ router.get(
   instructorAuthMiddleware,
   ListFolderContents,
 );
-
-// Delete routes (instructor only)
 router.delete("/folder/:folderId", instructorAuthMiddleware, DeleteFolder);
 router.delete("/content/:contentId", instructorAuthMiddleware, DeleteContent);
 
-// Reorder content within a folder
+// NOTE: ReorderContent returns 501 until a `position` column is added to course_contents
 router.patch("/folder/:folderId/reorder", instructorAuthMiddleware, ReorderContent);
 
-// Student routes
+// ─── Student — Enrollment & Payment ──────────────────────────────────────────
 router.post("/enroll/:courseId", studentAuthMiddleware, EnrollInCourse);
 router.post("/capturePayment", studentAuthMiddleware, CapturePayment);
 

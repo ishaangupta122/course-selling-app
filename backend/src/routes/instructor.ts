@@ -5,40 +5,32 @@ import {
   DeleteCourse,
   GetCourse,
   GetCourses,
+  GetProfile,
   Signin,
   Signup,
   UpdateCourse,
-  getInstructor,
+  UpdateProfile,
   getInstructorStudents,
 } from "../controllers/instructor";
 
 const router = Router();
 
-// /instructor/signup
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 router.post("/signup", Signup);
-
-// /instructor/signin
 router.post("/signin", Signin);
 
-// /instructor
-router.get("/", instructorAuthMiddleware, getInstructor);
+// ─── Profile ──────────────────────────────────────────────────────────────────
+router.get("/profile", instructorAuthMiddleware, GetProfile);
+router.put("/profile", instructorAuthMiddleware, UpdateProfile);
 
-// /instructor/students
+// ─── Students ─────────────────────────────────────────────────────────────────
 router.get("/students", instructorAuthMiddleware, getInstructorStudents);
 
-// Add Course
-router.post("/course", instructorAuthMiddleware, AddCourse);
-
-// Update Course
-router.put("/course/:id", instructorAuthMiddleware, UpdateCourse);
-
-// Get Courses
+// ─── Courses ──────────────────────────────────────────────────────────────────
 router.get("/courses", instructorAuthMiddleware, GetCourses);
-
-// Get Course
+router.post("/course", instructorAuthMiddleware, AddCourse);
 router.get("/course/:id", instructorAuthMiddleware, GetCourse);
-
-// Delete Course
+router.put("/course/:id", instructorAuthMiddleware, UpdateCourse);
 router.delete("/course/:id", instructorAuthMiddleware, DeleteCourse);
 
 export default router;

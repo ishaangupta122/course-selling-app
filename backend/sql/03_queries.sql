@@ -1,13 +1,8 @@
 -- 03_queries.sql
--- Run this file after schema and sample data.
--- It contains simple, teacher-friendly query examples.
+-- Run after schema and sample data
 
--- =====================================
 -- BASIC SELECT
--- =====================================
-
 SELECT * FROM instructors;
-
 SELECT * FROM courses;
 
 -- =====================================
@@ -19,33 +14,27 @@ SELECT
   c.id,
   c.title,
   c.price,
-  c.status,
   i.name AS instructor_name
 FROM courses c
-JOIN instructors i ON i.id = c.instructor_id
-ORDER BY c.created_at DESC;
+JOIN instructors i ON i.id = c.instructor_id;
 
 -- List enrolled students with course titles
 SELECT
   s.name AS student_name,
   c.title AS course_title,
-  e.status,
   e.enrolled_at
 FROM enrollments e
 JOIN students s ON s.id = e.student_id
-JOIN courses c ON c.id = e.course_id
-ORDER BY e.enrolled_at DESC;
+JOIN courses c ON c.id = e.course_id;
 
 -- List folder and content details for a course
 SELECT
   cf.name AS folder_name,
   cc.name AS content_name,
-  cc.type,
-  cc.position
+  cc.type
 FROM course_folders cf
 JOIN course_contents cc ON cc.course_folder_id = cf.id
-WHERE cf.course_id = 'cou_001'
-ORDER BY cc.position ASC;
+WHERE cf.course_id = 'cou_001';
 
 -- =====================================
 -- AGGREGATE FUNCTIONS
@@ -68,23 +57,19 @@ WHERE status = 'SUCCESS';
 SELECT
   c.id,
   c.title,
-  COUNT(e.id) AS active_enrollments
+  COUNT(e.id) AS total_enrollments
 FROM courses c
-LEFT JOIN enrollments e
-  ON e.course_id = c.id
- AND e.status = 'ACTIVE'
+LEFT JOIN enrollments e ON e.course_id = c.id
 GROUP BY c.id, c.title
-ORDER BY active_enrollments DESC;
+ORDER BY total_enrollments DESC;
 
 -- Show only courses with at least 1 enrollment
 SELECT
   c.id,
   c.title,
-  COUNT(e.id) AS active_enrollments
+  COUNT(e.id) AS total_enrollments
 FROM courses c
-LEFT JOIN enrollments e
-  ON e.course_id = c.id
- AND e.status = 'ACTIVE'
+LEFT JOIN enrollments e ON e.course_id = c.id
 GROUP BY c.id, c.title
 HAVING COUNT(e.id) >= 1;
 
@@ -113,31 +98,29 @@ WHERE price > (
   FROM courses
 );
 
--- Students enrolled in published courses only
+-- Students enrolled in any course
 SELECT name, email
 FROM students
 WHERE id IN (
-  SELECT e.student_id
-  FROM enrollments e
-  JOIN courses c ON c.id = e.course_id
-  WHERE c.status = 'PUBLISHED'
+  SELECT student_id
+  FROM enrollments
 );
 
 -- =====================================
--- SIMPLE UPDATE AND DELETE EXAMPLES
+-- UPDATE AND DELETE EXAMPLES
 -- =====================================
 
--- Approve an instructor
+-- Update instructor name
 UPDATE instructors
-SET status = 'ACTIVE'
-WHERE id = 'ins_002'
-RETURNING id, name, email, status;
+SET organization = 'ishaan'
+WHERE id = 'YKPsX8CCtPpFpoYMXHlT-'
+RETURNING id, name;
 
--- Publish a course
+-- Update course price
 UPDATE courses
-SET status = 'PUBLISHED'
-WHERE id = 'cou_002'
-RETURNING id, title, status;
+SET price = 5000
+WHERE id = '_L_5JcVv4oEZ8z-ZVOus_'
+RETURNING id, title, price;
 
 -- Example delete (commented for safety)
 -- DELETE FROM course_contents

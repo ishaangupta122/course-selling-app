@@ -10,7 +10,6 @@ import {
   toInstructorPayload,
   toStudentPayload,
 } from "../helper/dbMappers";
-import { extractSubdomain } from "../helper/subdomainHelper";
 import { deleteMultipleFiles } from "../helper/aws";
 import {
   CourseRow,
@@ -80,81 +79,13 @@ async function getCourseDetails(courseId: string, instructorId?: string) {
   return buildCourseWithFolders(course, folderResult.rows, contentResult.rows);
 }
 
-export const getInstructorStudents = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const [instructorResult, studentsResult] = await Promise.all([
-      query<InstructorRow>(SQL.instructor.findById, [req.instructorId!]),
-      query<StudentRow>(SQL.instructor.getStudents, [req.instructorId!]),
-    ]);
-
-    const instructor = instructorResult.rows[0];
-
-    if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
-      return;
-    }
-
-    const students = studentsResult.rows.map(toStudentPayload);
-
-    res.status(200).json({
-      message: "Students fetched successfully!",
-      instructor: {
-        ...toInstructorPayload(instructor),
-        students,
-      },
-      students,
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
-  }
-};
-
-export const getInstructor = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const subdomain = extractSubdomain(req);
-
-    if (!subdomain) {
-      res.status(400).json({ message: "Invalid subdomain" });
-      return;
-    }
-
-    const instructor = await getInstructorById(req.instructorId!);
-
-    if (!instructor) {
-      res.status(400).json({ message: "Instructor not found" });
-      return;
-    }
-
-    res.status(200).json({
-      message: "Instructor fetched successfully!",
-      instructor: toInstructorPayload(instructor),
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
-  }
-};
+// ─── Auth ────────────────────────────────────────────────────────────────────
 
 export const Signup = async (req: Request, res: Response): Promise<void> => {
   const parsedData = InstructorSignUpSchema.safeParse(req.body);
 
   if (!parsedData.success) {
-    res.status(400).json({
-      message: "Invalid credentials",
-    });
+    res.status(400).json({ message: "Invalid credentials" });
     return;
   }
 
@@ -166,9 +97,7 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (existingInstructor) {
-      res.status(400).json({
-        message: "Instructor already exists!",
-      });
+      res.status(400).json({ message: "Instructor already exists!" });
       return;
     }
 
@@ -188,9 +117,7 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (!token) {
-      res.status(400).json({
-        message: "Something went wrong!",
-      });
+      res.status(500).json({ message: "Something went wrong!" });
       return;
     }
 
@@ -202,9 +129,7 @@ export const Signup = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Internal Server Error",
-    });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -212,9 +137,7 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
   const parsedData = SignInSchema.safeParse(req.body);
 
   if (!parsedData.success) {
-    res.status(400).json({
-      message: "Invalid credentials",
-    });
+    res.status(400).json({ message: "Invalid credentials" });
     return;
   }
 
@@ -222,41 +145,22 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
     const instructor = await getInstructorByEmail(parsedData.data.email);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
-    if (instructor.status === "BLOCKED") {
-      res.status(403).json({
-        message: "Instructor account is blocked",
-      });
-      return;
-    }
-
-    if (instructor.status === "PENDING") {
-      res.status(403).json({
-        message: "Instructor account is pending approval",
-      });
-      return;
-    }
-
-    const hashedPassword = await bcrypt.compare(
+    const isMatch = await bcrypt.compare(
       parsedData.data.password,
       instructor.password,
     );
 
-    if (!hashedPassword) {
+    if (!isMatch) {
       res.status(401).json({ message: "Invalid credentials" });
       return;
     }
 
     const token = jwt.sign(
-      {
-        instructorId: instructor.id,
-        role: "instructor",
-      },
+      { instructorId: instructor.id, role: "instructor" },
       JWT_SECRET!,
     );
 
@@ -264,27 +168,102 @@ export const Signin = async (req: Request, res: Response): Promise<void> => {
       message: "Signed in Successfully!",
       instructorId: instructor.id,
       token,
-      instructor: {
-        ...toInstructorPayload(instructor),
-        password: "",
-      },
+      instructor: toInstructorPayload(instructor),
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
+    res.status(500).json({ message: "Something went wrong!" });
   }
 };
+
+// ─── Profile ─────────────────────────────────────────────────────────────────
+
+export const GetProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const instructor = await getInstructorById(req.instructorId!);
+
+    if (!instructor) {
+      res.status(404).json({ message: "Instructor not found!" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Profile fetched successfully!",
+      instructor: toInstructorPayload(instructor),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Something went wrong!" });
+  }
+};
+
+export const UpdateProfile = async (req: Request, res: Response): Promise<void> => {
+  const { name, password } = req.body;
+
+  try {
+    let hashedPassword: string | undefined;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    const instructorResult = await query<InstructorRow>(
+      SQL.instructor.updateProfile,
+      [req.instructorId!, name ?? null, hashedPassword ?? null],
+    );
+    const instructor = instructorResult.rows[0];
+
+    if (!instructor) {
+      res.status(404).json({ message: "Instructor not found!" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Profile updated successfully!",
+      instructor: toInstructorPayload(instructor),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Something went wrong!" });
+  }
+};
+
+// ─── Students ────────────────────────────────────────────────────────────────
+
+export const getInstructorStudents = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const [instructorResult, studentsResult] = await Promise.all([
+      query<InstructorRow>(SQL.instructor.findById, [req.instructorId!]),
+      query<StudentRow>(SQL.instructor.getStudents, [req.instructorId!]),
+    ]);
+
+    const instructor = instructorResult.rows[0];
+
+    if (!instructor) {
+      res.status(404).json({ message: "Instructor not found!" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Students fetched successfully!",
+      students: studentsResult.rows.map(toStudentPayload),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Something went wrong!" });
+  }
+};
+
+// ─── Courses ─────────────────────────────────────────────────────────────────
 
 export const AddCourse = async (req: Request, res: Response): Promise<void> => {
   const parsedData = CourseSchema.safeParse(req.body);
 
   if (!parsedData.success) {
     console.log(parsedData.error);
-    res.status(400).json({
-      message: "Invalid data!",
-    });
+    res.status(400).json({ message: "Invalid data!" });
     return;
   }
 
@@ -315,9 +294,7 @@ export const AddCourse = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
+    res.status(500).json({ message: "Something went wrong!" });
   }
 };
 
@@ -329,9 +306,7 @@ export const UpdateCourse = async (
   const parsedData = CourseSchema.safeParse(req.body);
 
   if (!parsedData.success) {
-    res.status(400).json({
-      message: "Invalid inputs",
-    });
+    res.status(400).json({ message: "Invalid inputs" });
     return;
   }
 
@@ -358,9 +333,7 @@ export const UpdateCourse = async (
     const course = courseResult.rows[0];
 
     if (!course) {
-      res.status(400).json({
-        message: "Failed to update course!",
-      });
+      res.status(404).json({ message: "Course not found or update failed!" });
       return;
     }
 
@@ -370,9 +343,7 @@ export const UpdateCourse = async (
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
+    res.status(500).json({ message: "Something went wrong!" });
   }
 };
 
@@ -384,9 +355,7 @@ export const GetCourses = async (
     const instructor = await getInstructorById(req.instructorId!);
 
     if (!instructor) {
-      res.status(400).json({
-        message: "Instructor not found!",
-      });
+      res.status(404).json({ message: "Instructor not found!" });
       return;
     }
 
@@ -401,9 +370,7 @@ export const GetCourses = async (
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
+    res.status(500).json({ message: "Something went wrong!" });
   }
 };
 
@@ -415,9 +382,7 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (!course) {
-      res.status(400).json({
-        message: "Course not found!",
-      });
+      res.status(404).json({ message: "Course not found!" });
       return;
     }
 
@@ -427,9 +392,7 @@ export const GetCourse = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
+    res.status(500).json({ message: "Something went wrong!" });
   }
 };
 
@@ -463,8 +426,6 @@ export const DeleteCourse = async (
     });
   } catch (error) {
     console.log(error);
-    res.status(400).json({
-      message: "Something went wrong!",
-    });
+    res.status(500).json({ message: "Something went wrong!" });
   }
 };

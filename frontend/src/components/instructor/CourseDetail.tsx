@@ -3,10 +3,14 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { Course } from "../../utils/types";
 import { Error, Loading } from "../../components/LoadingError";
 import { useQuery } from "@tanstack/react-query";
-import { getCourseDetail } from "../../api/courses";
+import {
+  capturePayment,
+  checkEnrollment as checkEnrollmentApi,
+  enrollInCourse,
+  getCourseDetail,
+} from "../../api/courses";
 import { useAuth } from "../../hooks/useAuth";
-import axios from "axios";
-import { API_URL, RAZORPAY_KEY_ID } from "../../config";
+import { RAZORPAY_KEY_ID } from "../../config";
 
 const CourseDetail = () => {
   const navigate = useNavigate();
@@ -30,12 +34,8 @@ const CourseDetail = () => {
   useEffect(() => {
     const checkEnrollment = async () => {
       try {
-        const response = await axios.get(`${API_URL}/student/${courseId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
-        setIsEnrolled(response.data.enrolled);
+        const response = await checkEnrollmentApi(courseId!);
+        setIsEnrolled(response.enrolled);
       } catch (error) {
         console.error("Error checking enrollment:", error);
       }
@@ -48,29 +48,16 @@ const CourseDetail = () => {
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     try {
-      const response = await axios.post(
-        `${API_URL}/course/enroll/${course?.id}`,
-        {
-          amount: course?.price,
-          currency: "INR",
-          receipt: `course-${course?.id}`,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        },
-      );
+      const response = await enrollInCourse(course!.id);
 
-      if (response.data.success) {
+      if (response.success) {
         openRazorpay(
-          response.data.order.id,
-          response.data.order.amount,
-          response.data.order.currency,
+          response.order.id,
+          response.order.amount,
+          response.order.currency,
         );
       } else {
-        console.log("Error creating order:", response.data.details);
+        console.log("Error creating order", response);
       }
     } catch (err) {
       console.error("Error creating order:", err);
@@ -89,32 +76,24 @@ const CourseDetail = () => {
       name: "Courses",
       description: `Payment for Course - ${course?.title}`,
       order_id: orderId,
-      handler: async function (response: { razorpay_payment_id: string, razorpay_order_id: string, razorpay_signature: string }) {
+      handler: async function (response: {
+        razorpay_payment_id: string;
+        razorpay_order_id: string;
+        razorpay_signature: string;
+      }) {
         try {
-          const captureResponse = await axios.post(
-            `${API_URL}/course/capturePayment`,
-            {
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature,
-              courseId,
-            },
-            {
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            },
-          );
+          const captureResponse = await capturePayment({
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+            courseId: courseId!,
+          });
 
-          if (captureResponse.data.success) {
+          if (captureResponse.success) {
             alert("Payment successful");
             navigate("/enrolled-courses");
           } else {
-            console.log(
-              "Error capturing payment:",
-              captureResponse.data.details,
-            );
+            console.log("Error capturing payment", captureResponse);
           }
         } catch (error) {
           console.error("Error capturing payment:", error);
