@@ -19,6 +19,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AddVideo from "./pages/platform/AddVideo";
 import StudentCourseViewer from "./pages/instructor/StudentCourseViewer";
 import StudentProfile from "./pages/instructor/StudentProfile";
+import StudentsList from "./pages/instructor/StudentsList";
 import AdminSignin from "./pages/admin/AdminSignin";
 import AdminSignup from "./pages/admin/AdminSignup";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -36,7 +37,9 @@ const MainRoutes = () => {
         <Route
           path="/instructor/dashboard"
           element={
-            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
+            <ProtectedRoute
+              allowedRoles={["instructor"]}
+              redirectTo="/instructor/signin">
               <Dashboard />
             </ProtectedRoute>
           }
@@ -44,7 +47,9 @@ const MainRoutes = () => {
         <Route
           path="/instructor/dashboard/course/:courseId"
           element={
-            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
+            <ProtectedRoute
+              allowedRoles={["instructor"]}
+              redirectTo="/instructor/signin">
               <ManageCourse />
             </ProtectedRoute>
           }
@@ -52,15 +57,29 @@ const MainRoutes = () => {
         <Route
           path="/instructor/profile"
           element={
-            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
+            <ProtectedRoute
+              allowedRoles={["instructor"]}
+              redirectTo="/instructor/signin">
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/instructor/students"
+          element={
+            <ProtectedRoute
+              allowedRoles={["instructor"]}
+              redirectTo="/instructor/signin">
+              <StudentsList />
             </ProtectedRoute>
           }
         />
         <Route
           path="/instructor/dashboard/course/:courseId/add"
           element={
-            <ProtectedRoute allowedRoles={["instructor"]} redirectTo="/instructor/signin">
+            <ProtectedRoute
+              allowedRoles={["instructor"]}
+              redirectTo="/instructor/signin">
               <AddVideo />
             </ProtectedRoute>
           }

@@ -1,5 +1,8 @@
 export const SQL = {
   admin: {
+    findFirst: `
+      SELECT * FROM admins ORDER BY created_at ASC LIMIT 1
+    `,
     findByEmail: `
       SELECT * FROM admins WHERE email = $1 LIMIT 1
     `,

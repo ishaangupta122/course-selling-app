@@ -14,7 +14,7 @@ import { RAZORPAY_KEY_ID } from "../../config";
 
 const CourseDetail = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, role } = useAuth();
   const { courseId } = useParams();
 
   const { isLoading, error, data } = useQuery({
@@ -24,6 +24,20 @@ const CourseDetail = () => {
 
   const [course, setCourse] = useState<Course>();
   const [isEnrolled, setIsEnrolled] = useState<boolean>(false);
+  const [isPaying, setIsPaying] = useState<boolean>(false);
+
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    const maybeAxiosError = error as {
+      response?: { data?: { message?: string } };
+      message?: string;
+    };
+
+    return (
+      maybeAxiosError?.response?.data?.message ||
+      maybeAxiosError?.message ||
+      fallback
+    );
+  };
 
   useEffect(() => {
     if (data?.course) {
@@ -47,8 +61,29 @@ const CourseDetail = () => {
 
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
+
+    if (!isAuthenticated || role !== "student") {
+      alert("Please sign in as a student to enroll in this course.");
+      navigate("/signin");
+      return;
+    }
+
+    if (!course?.id) {
+      alert("Course details are not loaded yet. Please try again.");
+      return;
+    }
+
+    if (!RAZORPAY_KEY_ID || !window.Razorpay) {
+      alert(
+        "Payment service is unavailable right now. Please refresh and try again.",
+      );
+      return;
+    }
+
+    setIsPaying(true);
+
     try {
-      const response = await enrollInCourse(course!.id);
+      const response = await enrollInCourse(course.id);
 
       if (response.success) {
         openRazorpay(
@@ -57,10 +92,15 @@ const CourseDetail = () => {
           response.order.currency,
         );
       } else {
-        console.log("Error creating order", response);
+        setIsPaying(false);
+        alert(response.message || "Unable to create payment order.");
       }
-    } catch (err) {
-      console.error("Error creating order:", err);
+    } catch (error) {
+      setIsPaying(false);
+      alert(
+        getErrorMessage(error, "Unable to start payment. Please try again."),
+      );
+      console.error("Error creating order:", error);
     }
   };
 
@@ -90,14 +130,31 @@ const CourseDetail = () => {
           });
 
           if (captureResponse.success) {
+            setIsPaying(false);
             alert("Payment successful");
             navigate("/enrolled-courses");
           } else {
+            setIsPaying(false);
+            alert(
+              captureResponse.message || "Payment failed. Please try again.",
+            );
             console.log("Error capturing payment", captureResponse);
           }
         } catch (error) {
+          setIsPaying(false);
+          alert(
+            getErrorMessage(
+              error,
+              "Payment verification failed. Please contact support.",
+            ),
+          );
           console.error("Error capturing payment:", error);
         }
+      },
+      modal: {
+        ondismiss: function () {
+          setIsPaying(false);
+        },
       },
       // prefill: {
       // 	name: name,
@@ -170,8 +227,9 @@ const CourseDetail = () => {
                     <button
                       type="submit"
                       onClick={handleSubmit}
+                      disabled={isPaying}
                       className="bg-gray-800 duration-200 focus:outline-none focus:shadow-outline font-medium h-12 hover:bg-gray-900 inline-flex items-center justify-center px-6 text-white tracking-wide transition w-full">
-                      Buy Now
+                      {isPaying ? "Processing..." : "Buy Now"}
                     </button>
                   </div>
                 )}

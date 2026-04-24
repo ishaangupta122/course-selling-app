@@ -8,6 +8,7 @@ import {
   LogOut,
   LayoutDashboard,
   UserRound,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useRecoilValue } from "recoil";
@@ -84,6 +85,13 @@ const Navbar = () => {
           className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
           <LayoutDashboard size={15} className="text-gray-400" />
           Dashboard
+        </Link>
+        <Link
+          to="/instructor/students"
+          onClick={() => setIsProfileDropdownOpen(false)}
+          className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
+          <Users size={15} className="text-gray-400" />
+          Students List
         </Link>
         <Link
           to="/instructor/profile"
@@ -240,6 +248,12 @@ const Navbar = () => {
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition">
                   <LayoutDashboard size={15} className="text-gray-400" />{" "}
                   Dashboard
+                </Link>
+                <Link
+                  to="/instructor/students"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition">
+                  <Users size={15} className="text-gray-400" /> Students List
                 </Link>
                 <Link
                   to="/instructor/profile"

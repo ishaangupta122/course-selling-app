@@ -37,7 +37,7 @@ export interface Course {
   createdAt?: string;
   updatedAt?: string;
   courseFolders?: CourseFolder[];
-  enrollmentsCount?: string; // from getByInstructorWithCounts — COUNT is returned as text
+  enrollmentsCount?: number | string;
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────

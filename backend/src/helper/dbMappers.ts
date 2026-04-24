@@ -39,10 +39,13 @@ export function toCoursePayload(row: CourseRow) {
 }
 
 export function toCourseWithCountPayload(row: CourseWithEnrollmentCountRow) {
+  const enrollmentsCount = Number(row.enrollments_count);
+
   return {
     ...toCoursePayload(row),
+    enrollmentsCount,
     _count: {
-      enrollments: Number(row.enrollments_count),
+      enrollments: enrollmentsCount,
     },
   };
 }
@@ -119,20 +122,24 @@ export function buildCourseWithFolders(
       courseId: folder.course_id,
       createdAt: folder.created_at,
       updatedAt: folder.updated_at,
-      courseContents: (contentsByFolder.get(folder.id) ?? []).map((content) => ({
-        id: content.id,
-        name: content.name,
-        type: content.type,
-        url: content.url,
-        courseFolderId: content.course_folder_id,
-        createdAt: content.created_at,
-        updatedAt: content.updated_at,
-      })),
+      courseContents: (contentsByFolder.get(folder.id) ?? []).map(
+        (content) => ({
+          id: content.id,
+          name: content.name,
+          type: content.type,
+          url: content.url,
+          courseFolderId: content.course_folder_id,
+          createdAt: content.created_at,
+          updatedAt: content.updated_at,
+        }),
+      ),
     })),
   };
 }
 
-export function toStudentEnrollmentCoursePayload(row: StudentEnrollmentCourseRow) {
+export function toStudentEnrollmentCoursePayload(
+  row: StudentEnrollmentCourseRow,
+) {
   return {
     id: row.id,
     studentId: row.student_id,

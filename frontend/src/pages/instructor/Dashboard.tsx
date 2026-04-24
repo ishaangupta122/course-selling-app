@@ -73,6 +73,11 @@ const Dashboard = () => {
                 </Link>
               </h1>
             </div>
+            <Link
+              to="/instructor/students"
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
+              View Students
+            </Link>
           </div>
         )}
 
@@ -182,11 +187,9 @@ const Dashboard = () => {
                             {course.type}
                           </span>
                         )}
-                        {Number(course.enrollmentsCount ?? 0) > 0 && (
-                          <span className="bg-green-50 text-green-600 rounded-full px-2 py-0.5 text-xs font-medium">
-                            {course.enrollmentsCount} enrolled
-                          </span>
-                        )}
+                        <span className="bg-green-50 text-green-600 rounded-full px-2 py-0.5 text-xs font-medium">
+                          {Number(course.enrollmentsCount ?? 0)} students
+                        </span>
                       </div>
 
                       {/* Footer */}

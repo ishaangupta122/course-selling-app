@@ -25,17 +25,17 @@ export const Signup = async (req: Request, res: Response) => {
   const JWT_SECRET = process.env.JWT_SECRET;
 
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const existingAdminResult = await query<AdminRow>(SQL.admin.findByEmail, [
-      email,
-    ]);
+    const existingAdminResult = await query<AdminRow>(SQL.admin.findFirst);
     const existingAdmin = existingAdminResult.rows[0];
 
     if (existingAdmin) {
-      res.status(400).json({ message: "Admin already exists!" });
+      res.status(403).json({
+        message: "Admin account already exists. Only one admin is allowed.",
+      });
       return;
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const adminResult = await query<AdminRow>(SQL.admin.create, [
       nanoid(),
