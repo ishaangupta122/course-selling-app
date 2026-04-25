@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X, LogOut, LayoutDashboard, UserRound, ChevronDown, Shield } from "lucide-react";
+import { Menu, X, LogOut, UserRound, ChevronDown, Shield } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 
 interface AdminNavbarProps {
@@ -18,7 +18,10 @@ const AdminNavbar = ({ adminName, adminEmail }: AdminNavbarProps) => {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(e.target as Node)
+      ) {
         setIsProfileDropdownOpen(false);
       }
     };
@@ -34,7 +37,12 @@ const AdminNavbar = ({ adminName, adminEmail }: AdminNavbarProps) => {
   };
 
   const initials = adminName
-    ? adminName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+    ? adminName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
     : "AD";
 
   const ProfileDropdown = () => (
@@ -45,36 +53,25 @@ const AdminNavbar = ({ adminName, adminEmail }: AdminNavbarProps) => {
           {initials}
         </div>
         <div className="min-w-0">
-          <p className="text-white font-semibold text-sm truncate">{adminName ?? "Admin"}</p>
+          <p className="text-white font-semibold text-sm truncate">
+            {adminName ?? "Admin"}
+          </p>
           <p className="text-white/70 text-xs truncate">{adminEmail ?? ""}</p>
-          <span className="inline-flex items-center gap-1 text-white/80 text-[10px] mt-0.5">
-            <Shield size={9} /> Administrator
-          </span>
         </div>
       </div>
       {/* Links */}
       <div className="py-1">
         <Link
-          to="/admin/dashboard"
-          onClick={() => setIsProfileDropdownOpen(false)}
-          className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition"
-        >
-          <LayoutDashboard size={15} className="text-gray-400" />
-          Dashboard
-        </Link>
-        <Link
           to="/admin/profile"
           onClick={() => setIsProfileDropdownOpen(false)}
-          className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition"
-        >
+          className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
           <UserRound size={15} className="text-gray-400" />
           Edit Profile
         </Link>
         <hr className="my-1 border-gray-100" />
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition"
-        >
+          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition">
           <LogOut size={15} />
           Sign out
         </button>
@@ -84,34 +81,26 @@ const AdminNavbar = ({ adminName, adminEmail }: AdminNavbarProps) => {
 
   return (
     <header className="bg-white border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 py-2 lg:px-8">
         <div className="relative flex items-center justify-between h-14">
           {/* Logo + brand */}
-          <Link to="/admin/dashboard" className="flex items-center gap-2">
+          <Link
+            to="/admin/dashboard"
+            className="flex items-center gap-2 cursor-pointer">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center">
               <Shield size={16} className="text-white" />
             </div>
-            <span className="font-bold text-gray-900 text-sm">Admin Panel</span>
+            <span className="font-bold text-gray-900 text-base">
+              Admin Panel
+            </span>
           </Link>
-
-          {/* Desktop nav links */}
-          <nav className="hidden lg:flex items-center gap-1">
-            <Link
-              to="/admin/dashboard"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition"
-            >
-              <LayoutDashboard size={14} />
-              Dashboard
-            </Link>
-          </nav>
 
           {/* Profile button */}
           <div className="hidden lg:block" ref={profileRef}>
             <div className="relative">
               <button
                 onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                className="flex items-center gap-2 border border-gray-200 rounded-full pl-1 pr-4 py-1 hover:bg-gray-50 transition"
-              >
+                className="flex items-center gap-2 border border-gray-200 rounded-full pl-1 pr-4 py-1 hover:bg-gray-50 transition">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-white text-xs font-bold">
                   {initials}
                 </div>
@@ -128,7 +117,9 @@ const AdminNavbar = ({ adminName, adminEmail }: AdminNavbarProps) => {
           </div>
 
           {/* Mobile hamburger */}
-          <button className="block lg:hidden" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+          <button
+            className="block lg:hidden"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
             {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
@@ -142,22 +133,25 @@ const AdminNavbar = ({ adminName, adminEmail }: AdminNavbarProps) => {
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-white font-semibold text-sm truncate">{adminName ?? "Admin"}</p>
-              <p className="text-white/70 text-xs truncate">{adminEmail ?? ""}</p>
+              <p className="text-white font-semibold text-sm truncate">
+                {adminName ?? "Admin"}
+              </p>
+              <p className="text-white/70 text-xs truncate">
+                {adminEmail ?? ""}
+              </p>
               <span className="inline-flex items-center gap-1 text-white/80 text-[10px] mt-0.5">
                 <Shield size={9} /> Administrator
               </span>
             </div>
           </div>
-          <Link to="/admin/dashboard" onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition">
-            <LayoutDashboard size={15} className="text-gray-400" /> Dashboard
-          </Link>
-          <Link to="/admin/profile" onClick={() => setIsMobileMenuOpen(false)}
+          <Link
+            to="/admin/profile"
+            onClick={() => setIsMobileMenuOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition">
             <UserRound size={15} className="text-gray-400" /> Edit Profile
           </Link>
-          <button onClick={handleLogout}
+          <button
+            onClick={handleLogout}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition">
             <LogOut size={15} /> Sign out
           </button>

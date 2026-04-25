@@ -57,6 +57,7 @@ export interface Student {
   name: string;
   email: string;
   instructorId?: string;
+  tenant?: string;
   createdAt?: string;
   updatedAt?: string;
 }

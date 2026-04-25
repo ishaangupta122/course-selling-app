@@ -28,7 +28,12 @@ export const SQL = {
       DELETE FROM instructors WHERE id = $1
     `,
     getAllStudents: `
-      SELECT * FROM students ORDER BY created_at DESC
+      SELECT
+        s.*,
+        i.slug AS tenant
+      FROM students s
+      INNER JOIN instructors i ON i.id = s.instructor_id
+      ORDER BY s.created_at DESC
     `,
     deleteStudent: `
       DELETE FROM students WHERE id = $1

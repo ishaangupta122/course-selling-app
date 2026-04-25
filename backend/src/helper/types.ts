@@ -35,6 +35,7 @@ export interface StudentRow {
   email: string;
   password: string;
   instructor_id: string;
+  tenant?: string;
   created_at: Date;
   updated_at: Date;
 }

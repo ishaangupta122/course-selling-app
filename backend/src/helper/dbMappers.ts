@@ -68,6 +68,7 @@ export function toStudentPayload(row: StudentRow) {
     name: row.name,
     email: row.email,
     instructorId: row.instructor_id,
+    tenant: row.tenant,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

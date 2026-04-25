@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
-import { Plus } from "lucide-react";
+import {
+  Plus,
+  Users,
+  BookOpenCheck,
+  IndianRupee,
+  ExternalLink,
+} from "lucide-react";
 import AddCourse from "../../components/instructor/AddCourse";
 import useStudents from "../../hooks/useInstructorUsers";
 import { Link } from "react-router-dom";
@@ -37,6 +43,33 @@ const Dashboard = () => {
     0,
   );
 
+  const stats = [
+    {
+      label: "Total Students",
+      value: students.length.toLocaleString("en-IN"),
+      icon: Users,
+      cardClass: "bg-violet-50 border-violet-100",
+      iconClass: "bg-violet-100 text-violet-700",
+      valueClass: "text-violet-900",
+    },
+    {
+      label: "Total Courses",
+      value: courses.length.toLocaleString("en-IN"),
+      icon: BookOpenCheck,
+      cardClass: "bg-indigo-50 border-indigo-100",
+      iconClass: "bg-indigo-100 text-indigo-700",
+      valueClass: "text-indigo-900",
+    },
+    {
+      label: "Total Revenue",
+      value: `₹${totalRevenue.toLocaleString("en-IN")}`,
+      icon: IndianRupee,
+      cardClass: "bg-emerald-50/80 border-emerald-100",
+      iconClass: "bg-emerald-100/80 text-emerald-700",
+      valueClass: "text-emerald-900",
+    },
+  ];
+
   useEffect(() => {
     if (isAddCourseModalOpen || isUpdateCourseModalOpen) {
       document.body.style.overflow = "hidden";
@@ -58,75 +91,56 @@ const Dashboard = () => {
 
   return (
     <>
-      <div className="lg:px-8 px-4 pt-4">
+      <div className="lg:px-8 px-4 pt-6">
         {/* Topbar */}
         {instructor && (
-          <div className="max-w-screen-lg mx-auto flex items-center justify-between bg-white shadow-md p-4 mb-4 rounded-md">
-            <div className="">
-              <h1 className="text-lg font-bold">
-                Access your site at:{" "}
-                <Link
-                  to={`http://${instructor?.slug}.localhost:5173`}
-                  target="_blank"
-                  className="underline text-[#1a0dab]">
-                  http://{instructor?.slug}.localhost:5173
-                </Link>
-              </h1>
+          <div className="max-w-screen-lg mx-auto mb-6 rounded-xl border border-blue-100 bg-blue-50 shadow-sm p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-1">
+              Your Tenant URL
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base md:text-lg font-semibold text-blue-900">
+                Access your site at:
+              </span>
+              <Link
+                to={`http://${instructor?.slug}.localhost:5173`}
+                target="_blank"
+                className="inline-flex items-center gap-1 text-base md:text-lg font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800 transition">
+                http://{instructor?.slug}.localhost:5173
+                <ExternalLink size={16} className="shrink-0" />
+              </Link>
             </div>
-            <Link
-              to="/instructor/students"
-              className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
-              View Students
-            </Link>
           </div>
         )}
 
         {/* Cards */}
-        <div className="min-w-screen flex items-center justify-center px-5 py-5">
+        <div className="min-w-screen flex items-center justify-center px-2 md:px-5 py-2 md:py-5">
           <div className="w-full max-w-screen-lg">
-            <div className="-mx-2 md:flex">
-              <div className="w-full md:w-1/3 px-2">
-                <div className="rounded-lg shadow-sm mb-4">
-                  <div className="rounded-lg bg-white shadow-lg md:shadow-xl relative overflow-hidden">
-                    <div className="px-3 py-8 text-center relative">
-                      <h4 className="text-sm uppercase text-gray-500 leading-tight">
-                        Total Students
-                      </h4>
-                      <h3 className="text-3xl text-gray-700 font-semibold leading-tight mt-3">
-                        {students.length}
-                      </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {stats.map((stat) => {
+                const Icon = stat.icon;
+                return (
+                  <div
+                    key={stat.label}
+                    className={`rounded-xl border p-5 shadow-sm ${stat.cardClass}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                          {stat.label}
+                        </p>
+                        <p
+                          className={`mt-4 text-4xl font-bold leading-none ${stat.valueClass}`}>
+                          {stat.value}
+                        </p>
+                      </div>
+                      <div
+                        className={`h-10 w-10 rounded-lg flex items-center justify-center ${stat.iconClass}`}>
+                        <Icon size={20} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-              <div className="w-full md:w-1/3 px-2">
-                <div className="rounded-lg shadow-sm mb-4">
-                  <div className="rounded-lg bg-white shadow-lg md:shadow-xl relative overflow-hidden">
-                    <div className="px-3 py-8 text-center relative">
-                      <h4 className="text-sm uppercase text-gray-500 leading-tight">
-                        Total Courses
-                      </h4>
-                      <h3 className="text-3xl text-gray-700 font-semibold leading-tight mt-3">
-                        {courses.length}
-                      </h3>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full md:w-1/3 px-2">
-                <div className="rounded-lg shadow-sm mb-4">
-                  <div className="rounded-lg bg-white shadow-lg md:shadow-xl relative overflow-hidden">
-                    <div className="px-3 py-8 text-center relative">
-                      <h4 className="text-sm uppercase text-gray-500 leading-tight">
-                        Total Revenue
-                      </h4>
-                      <h3 className="text-3xl text-gray-700 font-semibold leading-tight mt-3">
-                        ₹{totalRevenue.toLocaleString("en-IN")}
-                      </h3>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -187,8 +201,8 @@ const Dashboard = () => {
                             {course.type}
                           </span>
                         )}
-                        <span className="bg-green-50 text-green-600 rounded-full px-2 py-0.5 text-xs font-medium">
-                          {Number(course.enrollmentsCount ?? 0)} students
+                        <span className="bg-green-50 text-green-600 rounded-full px-2 py-0.5 text-xs font-medium ml-auto">
+                          {Number(course.enrollmentsCount ?? 0)} enrolled
                         </span>
                       </div>
 

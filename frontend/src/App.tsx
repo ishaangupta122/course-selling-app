@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import Home from "./pages/platform/Home";
 import Signup from "./pages/platform/Signup";
 import Signin from "./pages/platform/Signin";
@@ -27,13 +27,23 @@ import AdminProfile from "./pages/admin/AdminProfile";
 
 const queryClient = new QueryClient();
 
-const MainRoutes = () => {
+const MainLayoutRoutes = () => {
   return (
     <MainLayout>
-      <Routes>
+      <Outlet />
+    </MainLayout>
+  );
+};
+
+const MainRoutes = () => {
+  return (
+    <Routes>
+      <Route element={<MainLayoutRoutes />}>
         <Route path="/" element={<Home />} />
         <Route path="/instructor/signup" element={<Signup />} />
         <Route path="/instructor/signin" element={<Signin />} />
+        <Route path="/admin/signin" element={<AdminSignin />} />
+        <Route path="/admin/signup" element={<AdminSignup />} />
         <Route
           path="/instructor/dashboard"
           element={
@@ -84,28 +94,26 @@ const MainRoutes = () => {
             </ProtectedRoute>
           }
         />
+      </Route>
 
-        {/* Admin routes — outside of any layout, full-page */}
-        <Route path="/admin/signin" element={<AdminSignin />} />
-        <Route path="/admin/signup" element={<AdminSignup />} />
-        <Route
-          path="/admin/dashboard"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]} redirectTo="/admin/signin">
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/profile"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]} redirectTo="/admin/signin">
-              <AdminProfile />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </MainLayout>
+      {/* Admin app routes stay outside MainLayout (no platform navbar/footer). */}
+      <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]} redirectTo="/admin/signin">
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/profile"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]} redirectTo="/admin/signin">
+            <AdminProfile />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 };
 

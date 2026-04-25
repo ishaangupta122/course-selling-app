@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -13,11 +14,18 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 import { useRecoilValue } from "recoil";
 import { instructorState } from "../../atoms";
+import { getInstructorProfile } from "../../api/instructor";
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, role } = useAuth();
   const instructor = useRecoilValue(instructorState);
+
+  const { data: profileData } = useQuery({
+    queryKey: ["navbarInstructorProfile"],
+    queryFn: getInstructorProfile,
+    enabled: isAuthenticated && role === "instructor",
+  });
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSigninDropdownOpen, setIsSigninDropdownOpen] = useState(false);
@@ -60,6 +68,11 @@ const Navbar = () => {
         .slice(0, 2)
     : "IN";
 
+  const instructorName =
+    instructor?.name ?? profileData?.instructor?.name ?? "Instructor";
+  const instructorEmail =
+    instructor?.email ?? profileData?.instructor?.email ?? "";
+
   // Profile card dropdown (desktop)
   const ProfileDropdown = () => (
     <div className="absolute right-0 top-14 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
@@ -70,29 +83,13 @@ const Navbar = () => {
         </div>
         <div className="min-w-0">
           <p className="text-white font-semibold text-sm truncate">
-            {instructor?.name ?? "Instructor"}
+            {instructorName}
           </p>
-          <p className="text-white/70 text-xs truncate">
-            {instructor?.email ?? ""}
-          </p>
+          <p className="text-white/70 text-xs truncate">{instructorEmail}</p>
         </div>
       </div>
       {/* Links */}
       <div className="py-1">
-        <Link
-          to="/instructor/dashboard"
-          onClick={() => setIsProfileDropdownOpen(false)}
-          className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
-          <LayoutDashboard size={15} className="text-gray-400" />
-          Dashboard
-        </Link>
-        <Link
-          to="/instructor/students"
-          onClick={() => setIsProfileDropdownOpen(false)}
-          className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition">
-          <Users size={15} className="text-gray-400" />
-          Students List
-        </Link>
         <Link
           to="/instructor/profile"
           onClick={() => setIsProfileDropdownOpen(false)}
@@ -164,24 +161,41 @@ const Navbar = () => {
               </div>
             </>
           ) : (
-            /* Profile button + dropdown */
-            <div ref={profileRef} className="relative">
-              <button
-                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                className="flex items-center gap-2 border border-gray-200 rounded-full pl-1 pr-4 py-1 hover:bg-gray-50 transition">
-                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                  {initials}
-                </div>
-                <span className="text-sm font-medium text-gray-700 max-w-[100px] truncate">
-                  {instructor?.name ?? "Profile"}
-                </span>
-                <ChevronDown
-                  size={13}
-                  className={`text-gray-400 transition-transform ${isProfileDropdownOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-              {isProfileDropdownOpen && <ProfileDropdown />}
-            </div>
+            <>
+              <nav className="hidden lg:flex items-center gap-1">
+                <Link
+                  to="/instructor/dashboard"
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition">
+                  Dashboard
+                </Link>
+                <Link
+                  to="/instructor/students"
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition">
+                  Students List
+                </Link>
+              </nav>
+
+              {/* Profile button + dropdown */}
+              <div ref={profileRef} className="relative">
+                <button
+                  onClick={() =>
+                    setIsProfileDropdownOpen(!isProfileDropdownOpen)
+                  }
+                  className="flex items-center gap-2 border border-gray-200 rounded-full pl-1 pr-4 py-1 hover:bg-gray-50 transition">
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                    {initials}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 max-w-[100px] truncate">
+                    {instructorName}
+                  </span>
+                  <ChevronDown
+                    size={13}
+                    className={`text-gray-400 transition-transform ${isProfileDropdownOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {isProfileDropdownOpen && <ProfileDropdown />}
+              </div>
+            </>
           )}
         </div>
 
@@ -235,10 +249,10 @@ const Navbar = () => {
                   </div>
                   <div className="min-w-0">
                     <p className="text-white font-semibold text-sm truncate">
-                      {instructor?.name ?? "Instructor"}
+                      {instructorName}
                     </p>
                     <p className="text-white/70 text-xs truncate">
-                      {instructor?.email ?? ""}
+                      {instructorEmail}
                     </p>
                   </div>
                 </div>
