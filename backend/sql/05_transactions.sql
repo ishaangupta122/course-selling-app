@@ -1,22 +1,22 @@
--- 05_transactions.sql
--- Run after schema, data, and views
-
 BEGIN;
 
--- Step 1: Update payment status (only if still pending)
-UPDATE payments
-SET status = 'SUCCESS',
-    razorpay_payment_id = 'payment_demo_2'
-WHERE razorpay_order_id = 'order_demo_1'
-  AND status = 'PENDING';
+-- Step 1: Update payment (only if still pending)
+WITH updated_payment AS (
+  UPDATE payments
+  SET status = 'SUCCESS',
+      razorpay_payment_id = 'payment_demo_2'
+  WHERE razorpay_order_id = 'order_demo_1'
+    AND status = 'PENDING'
+  RETURNING student_id, course_id
+)
 
--- Step 2: Create enrollment (if not already exists)
+-- Step 2: Insert enrollment ONLY if payment was updated
 INSERT INTO enrollments (id, student_id, course_id)
-VALUES ('enr_002', 'stu_002', 'cou_001')
+SELECT 
+  'enr_002',
+  student_id,
+  course_id
+FROM updated_payment
 ON CONFLICT (student_id, course_id) DO NOTHING;
 
 COMMIT;
-
--- Check results
-SELECT * FROM payments WHERE razorpay_order_id = 'order_demo_1';
-SELECT * FROM enrollments WHERE course_id = 'cou_001';

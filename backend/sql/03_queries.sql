@@ -1,14 +1,15 @@
--- 03_queries.sql
--- Run after schema and sample data
+-- DQL --
 
--- BASIC SELECT
+-- SELECT QUERIES
 SELECT * FROM instructors;
+SELECT * FROM students;
 SELECT * FROM courses;
+SELECT * FROM course_folders;
+SELECT * FROM course_contents;
+SELECT * FROM enrollments;
+SELECT * FROM payments;
 
--- =====================================
 -- JOIN QUERIES
--- =====================================
-
 -- List courses with instructor names
 SELECT
   c.id,
@@ -36,9 +37,7 @@ FROM course_folders cf
 JOIN course_contents cc ON cc.course_folder_id = cf.id
 WHERE cf.course_id = 'cou_001';
 
--- =====================================
 -- AGGREGATE FUNCTIONS
--- =====================================
 
 -- Count total students
 SELECT COUNT(*) AS total_students
@@ -49,9 +48,7 @@ SELECT COALESCE(SUM(amount), 0) AS total_revenue
 FROM payments
 WHERE status = 'SUCCESS';
 
--- =====================================
 -- GROUP BY AND HAVING
--- =====================================
 
 -- Count enrollments per course
 SELECT
@@ -86,9 +83,7 @@ LEFT JOIN payments p
 GROUP BY i.id, i.name
 ORDER BY total_revenue DESC;
 
--- =====================================
 -- SUBQUERY EXAMPLES
--- =====================================
 
 -- Courses priced above average price
 SELECT id, title, price
@@ -106,22 +101,20 @@ WHERE id IN (
   FROM enrollments
 );
 
--- =====================================
 -- UPDATE AND DELETE EXAMPLES
--- =====================================
 
 -- Update instructor name
 UPDATE instructors
-SET organization = 'ishaan'
-WHERE id = 'YKPsX8CCtPpFpoYMXHlT-'
+SET slug = 'bob'
+WHERE id = 'ins_002'
 RETURNING id, name;
 
 -- Update course price
 UPDATE courses
-SET price = 5000
-WHERE id = '_L_5JcVv4oEZ8z-ZVOus_'
+SET price = 799
+WHERE id = 'cou_001'
 RETURNING id, title, price;
 
--- Example delete (commented for safety)
--- DELETE FROM course_contents
--- WHERE id = 'con_002';
+-- Delete a course content
+DELETE FROM course_contents
+WHERE id = 'con_002';

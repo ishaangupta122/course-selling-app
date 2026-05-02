@@ -1,6 +1,3 @@
--- 01_schema_ddl.sql
--- Run this file first.
-
 DROP TABLE IF EXISTS payments CASCADE;
 DROP TABLE IF EXISTS enrollments CASCADE;
 DROP TABLE IF EXISTS course_contents CASCADE;
@@ -10,6 +7,7 @@ DROP TABLE IF EXISTS students CASCADE;
 DROP TABLE IF EXISTS instructors CASCADE;
 DROP TABLE IF EXISTS admins CASCADE;
 
+-- Admins table
 CREATE TABLE admins (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -19,6 +17,7 @@ CREATE TABLE admins (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Instructors table
 CREATE TABLE instructors (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -30,6 +29,7 @@ CREATE TABLE instructors (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Students table
 CREATE TABLE students (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -41,6 +41,7 @@ CREATE TABLE students (
   UNIQUE (email, instructor_id)
 );
 
+-- Courses table
 CREATE TABLE courses (
   id TEXT PRIMARY KEY,
   instructor_id TEXT NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
@@ -57,6 +58,7 @@ CREATE TABLE courses (
   CHECK (end_date IS NULL OR start_date IS NULL OR end_date >= start_date)
 );
 
+-- Course Folders table
 CREATE TABLE course_folders (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -66,6 +68,7 @@ CREATE TABLE course_folders (
   UNIQUE (course_id, name)
 );
 
+-- Course Contents table
 CREATE TABLE course_contents (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -76,6 +79,7 @@ CREATE TABLE course_contents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Enrollments table
 CREATE TABLE enrollments (
   id TEXT PRIMARY KEY,
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -85,6 +89,7 @@ CREATE TABLE enrollments (
   UNIQUE (student_id, course_id)
 );
 
+-- Payments table
 CREATE TABLE payments (
   id TEXT PRIMARY KEY,
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,

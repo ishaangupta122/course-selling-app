@@ -1,6 +1,3 @@
--- 02_sample_data_dml.sql
--- Run this after schema file
-
 -- Admin
 INSERT INTO admins (id, name, email, password)
 VALUES
@@ -48,7 +45,7 @@ VALUES
 ON CONFLICT (student_id, course_id) DO NOTHING;
 
 -- Payments
-INSERT INTO payments (id, student_id, course_id, amount, currency, razorpay_order_id, razorpay_payment_id, status)
+INSERT INTO payments (id, student_id, course_id, amount, razorpay_order_id, razorpay_payment_id, status)
 VALUES
-  ('pay_001', 'stu_001', 'cou_001', 999, 'INR', 'order_demo_1', 'payment_demo_1', 'SUCCESS')
+  ('pay_001', 'stu_001', 'cou_001', 999, 'order_demo_1', 'payment_demo_1', 'SUCCESS')
 ON CONFLICT (razorpay_order_id) DO NOTHING;

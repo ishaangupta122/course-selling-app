@@ -46,14 +46,6 @@ const StudentsList = () => {
               View and search all students registered under your organization.
             </p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 min-w-[170px]">
-            <p className="text-xs uppercase tracking-wide text-gray-500">
-              Total Students
-            </p>
-            <p className="text-2xl font-semibold text-gray-900 mt-1">
-              {students.length}
-            </p>
-          </div>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
