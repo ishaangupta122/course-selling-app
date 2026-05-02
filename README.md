@@ -4,7 +4,7 @@ Created a course-selling platform that allows educators to register and launch t
 
 ## Technologies Used:
 
-React, Node, Express, TypeScript, Postgres, Prisma ORM, Tailwind CSS, S3 Bucket, Razorpay Payment Gateawy
+React, Node, Express, TypeScript, Postgres, Tailwind CSS, S3 Bucket, Razorpay Payment Gateawy
 
 ## Steps to run the project:
 
