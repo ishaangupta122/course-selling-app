@@ -1,36 +1,32 @@
-import { Router } from 'express';
-import studentAuthMiddleware from '../middlewares/studentAuth';
+import { Router } from "express";
+import studentAuthMiddleware from "../middlewares/studentAuth";
 import {
-	CheckEnrollment,
-	getEnrolledCourse,
-	getEnrolledCourses,
-	GetProfile,
-	Signin,
-	Signup,
-	UpdateProfile,
-} from '../controllers/student';
+  CheckEnrollment,
+  getEnrolledCourse,
+  getEnrolledCourses,
+  GetProfile,
+  Signin,
+  Signup,
+  UpdateProfile,
+} from "../controllers/student";
 
 const router = Router();
 
-// /student/signup
-router.post('/signup', Signup);
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+router.post("/signup", Signup);
+router.post("/signin", Signin);
 
-// /student/signin
-router.post('/signin', Signin);
-
-// update profile
-router.put('/profile', studentAuthMiddleware, UpdateProfile);
-
-// get profile
-router.get('/profile', studentAuthMiddleware, GetProfile);
+// ─── Profile ──────────────────────────────────────────────────────────────────
+router.get("/profile", studentAuthMiddleware, GetProfile);
+router.put("/profile", studentAuthMiddleware, UpdateProfile);
 
 // All Enrolled Courses
-router.get('/courses', studentAuthMiddleware, getEnrolledCourses);
+router.get("/courses", studentAuthMiddleware, getEnrolledCourses);
 
 // Single Enrolled Course
-router.get('/courses/:courseId', studentAuthMiddleware, getEnrolledCourse);
+router.get("/courses/:courseId", studentAuthMiddleware, getEnrolledCourse);
 
 // Check Enrollment
-router.get('/:courseId', studentAuthMiddleware, CheckEnrollment);
+router.get("/:courseId", studentAuthMiddleware, CheckEnrollment);
 
 export default router;

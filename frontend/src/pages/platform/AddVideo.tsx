@@ -1,259 +1,307 @@
-import { useEffect, useState } from 'react';
-import { Upload, Folder } from 'lucide-react';
-import { getCourse } from '../../api/courses';
-import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
-import { Error, Loading } from '../../components/LoadingError';
-import { Course } from '../../utils/types';
-import { API_URL } from '../../config';
-import axios from 'axios';
+import { useEffect, useState } from "react";
+import { Upload, Folder, CheckCircle, AlertCircle } from "lucide-react";
+import { getCourse, uploadCourseContent } from "../../api/courses";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, Link } from "react-router-dom";
+import { Error, Loading } from "../../components/LoadingError";
+import { Course } from "../../utils/types";
+import { ArrowLeft } from "lucide-react";
 
 const AddVideo = () => {
-	const { courseId } = useParams();
+  const { courseId } = useParams();
 
-	const { isLoading, error, data } = useQuery({
-		queryKey: ['courses'],
-		queryFn: () => getCourse(courseId!),
-	});
+  const { isLoading, error, data, refetch } = useQuery({
+    queryKey: ["course", courseId],
+    queryFn: () => getCourse(courseId!),
+  });
 
-	const [course, setCourse] = useState<Course>();
-	const [selectedFile, setSelectedFile] = useState<File | null>(null);
-	const [uploading, setUploading] = useState(false);
-	const [currentFolder, setCurrentFolder] = useState('');
-	const [name, setName] = useState('');
-	const [type, setType] = useState('VIDEO');
-	const [uploadProgress, setUploadProgress] = useState(0);
-	const [message, setMessage] = useState('');
+  const [course, setCourse] = useState<Course>();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [currentFolder, setCurrentFolder] = useState("");
+  const [name, setName] = useState("");
+  const [type, setType] = useState<"VIDEO" | "NOTES">("VIDEO");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
 
-	useEffect(() => {
-		if (data?.course) {
-			setCourse(data.course);
-		}
-	}, [data]);
+  useEffect(() => {
+    if (data?.course) {
+      setCourse(data.course);
+    }
+  }, [data]);
 
-	const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-		const file = event.target.files?.[0];
-		if (file) {
-			setSelectedFile(file);
-			setMessage('');
-		}
-	};
+  // Reset file selection when type changes
+  const handleTypeChange = (newType: "VIDEO" | "NOTES") => {
+    setType(newType);
+    setSelectedFile(null);
+    setStatus("idle");
+    setMessage("");
+  };
 
-	const uploadVideo = async () => {
-		if (!selectedFile || !currentFolder) {
-			setMessage('Please select a file and folder');
-			return;
-		}
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Auto-fill name from filename (strip extension)
+      if (!name) {
+        setName(file.name.replace(/\.[^/.]+$/, ""));
+      }
+      setSelectedFile(file);
+      setStatus("idle");
+      setMessage("");
+    }
+  };
 
-		setUploading(true);
-		setUploadProgress(0);
+  const uploadFile = async () => {
+    if (!selectedFile || !currentFolder) {
+      setMessage("Please select a file and choose a folder.");
+      setStatus("error");
+      return;
+    }
+    if (!name.trim()) {
+      setMessage("Please enter a title.");
+      setStatus("error");
+      return;
+    }
 
-		const formData = new FormData();
-		formData.append('video', selectedFile);
-		formData.append('name', name);
-		formData.append('type', type);
-		formData.append('courseId', courseId!);
-		formData.append('folderId', currentFolder);
+    setUploading(true);
+    setUploadProgress(0);
+    setStatus("idle");
 
-		try {
-			const response = await axios.post(
-				`${API_URL}/course/uploadVideo`,
-				formData,
-				{
-					headers: {
-						'Content-Type': 'multipart/form-data',
-						Authorization: `Bearer ${localStorage.getItem(
-							'token'
-						)}`,
-					},
-					onUploadProgress: (progressEvent) => {
-						if (progressEvent.total) {
-							const progress = Math.round(
-								(progressEvent.loaded / progressEvent.total) *
-									100
-							);
-							setUploadProgress(progress);
-						}
-					},
-				}
-			);
+    try {
+      await uploadCourseContent({
+        file: selectedFile,
+        name: name.trim(),
+        type,
+        courseId: courseId!,
+        folderId: currentFolder,
+        onUploadProgress: (progress) => setUploadProgress(progress),
+      });
 
-			if (response.status === 200) {
-				setMessage('Upload successful');
-				setSelectedFile(null);
-				setUploadProgress(100);
-			} else {
-				setMessage('Error uploading video');
-			}
-		} catch (error) {
-			setMessage('Error uploading video');
-		} finally {
-			setUploading(false);
-		}
-	};
+      setStatus("success");
+      setMessage(
+        `${type === "VIDEO" ? "Video" : "Notes"} uploaded successfully!`,
+      );
+      setSelectedFile(null);
+      setName("");
+      setUploadProgress(100);
+      // Refresh folder list so new item shows immediately
+      refetch();
+    } catch (error) {
+      setStatus("error");
+      setMessage("Upload failed. Please check your connection and try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
-	if (isLoading) {
-		return <Loading />;
-	}
+  if (isLoading) return <Loading />;
+  if (error) return <Error />;
 
-	if (error) {
-		return <Error />;
-	}
+  const isNotes = type === "NOTES";
+  const acceptAttr = isNotes ? "application/pdf,.pdf" : "video/*";
+  const fileLabel = isNotes ? "PDF file" : "video file";
 
-	return (
-		<div className='max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-md'>
-			<div className='mb-6'>
-				<h2 className='text-2xl font-semibold mb-4'>
-					Upload Course {type === 'VIDEO' ? 'Video' : 'Notes'}
-				</h2>
+  return (
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Back link */}
+        <Link
+          to={`/instructor/dashboard/course/${courseId}`}
+          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6 transition">
+          <ArrowLeft size={16} />
+          Back to {course?.title ?? "Course"}
+        </Link>
 
-				<div className='mb-4'>
-					<div className='flex items-center gap-2 mb-2'>
-						<Folder className='w-5 h-5' />
-						<span className='font-medium'>Select Folder</span>
-					</div>
+        <div className="bg-white rounded-2xl shadow-sm border p-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">
+            Add Course Content
+          </h1>
+          <p className="text-sm text-gray-400 mb-8">
+            Upload a video lesson or PDF notes to a folder in this course.
+          </p>
 
-					<div className='flex items-center gap-2'>
-						<select
-							value={currentFolder}
-							onChange={(e) => setCurrentFolder(e.target.value)}
-							className='flex-1 p-2 border rounded'
-						>
-							<option value=''>Select Folder</option>
-							{course?.courseFolders &&
-								course?.courseFolders.map((folder) => (
-									<option key={folder.id} value={folder.id}>
-										{folder.name}
-									</option>
-								))}
-						</select>
-					</div>
-				</div>
+          {/* Content Type Toggle */}
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Content Type
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleTypeChange("VIDEO")}
+                className={`flex-1 py-3 rounded-xl border-2 text-sm font-semibold transition ${
+                  !isNotes
+                    ? "border-black bg-black text-white"
+                    : "border-gray-200 text-gray-500 hover:border-gray-400"
+                }`}>
+                🎬 Video
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTypeChange("NOTES")}
+                className={`flex-1 py-3 rounded-xl border-2 text-sm font-semibold transition ${
+                  isNotes
+                    ? "border-black bg-black text-white"
+                    : "border-gray-200 text-gray-500 hover:border-gray-400"
+                }`}>
+                📄 Notes (PDF)
+              </button>
+            </div>
+          </div>
 
-				<div className='flex items-center mb-4 gap-2'>
-					<div className='w-full'>
-						<div className='flex items-center gap-2 mb-2'>
-							<span className='font-medium'>
-								{type === 'VIDEO' ? 'Video' : 'Notes'} Title
-							</span>
-						</div>
+          {/* Folder Select */}
+          <div className="mb-5">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <Folder size={14} className="inline mr-1" />
+              Folder
+            </label>
+            <select
+              value={currentFolder}
+              onChange={(e) => setCurrentFolder(e.target.value)}
+              className="w-full p-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-gray-800 transition">
+              <option value="">Select a folder</option>
+              {course?.courseFolders?.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+            {!course?.courseFolders?.length && (
+              <p className="text-xs text-amber-600 mt-1">
+                No folders yet.{" "}
+                <Link
+                  to={`/instructor/dashboard/course/${courseId}`}
+                  className="underline">
+                  Go back and create one first.
+                </Link>
+              </p>
+            )}
+          </div>
 
-						<div className='flex items-center gap-2'>
-							<input
-								type='text'
-								className='flex-1 p-2 border rounded'
-								value={name}
-								onChange={(e) => setName(e.target.value)}
-							/>
-						</div>
-					</div>
-					<div className=''>
-						<div className='flex items-center gap-2 mb-2'>
-							<span className='font-medium'>Type</span>
-						</div>
+          {/* Title */}
+          <div className="mb-5">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              {isNotes ? "Notes Title" : "Video Title"}
+            </label>
+            <input
+              type="text"
+              className="w-full p-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-gray-800 transition"
+              placeholder={
+                isNotes
+                  ? "e.g. Week 1 Lecture Notes"
+                  : "e.g. Introduction to the Course"
+              }
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
 
-						<div className='flex items-center gap-2'>
-							<select
-								className='p-2 border rounded'
-								value={type}
-								onChange={(e) => setType(e.target.value)}
-							>
-								<option value='VIDEO'>Video</option>
-								<option value='NOTES'>Notes</option>
-							</select>
-						</div>
-					</div>
-				</div>
+          {/* File Upload Zone */}
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <Upload size={14} className="inline mr-1" />
+              Upload {isNotes ? "PDF" : "Video"}
+            </label>
 
-				{/* File Upload */}
-				<div className='mb-4'>
-					<div className='flex items-center gap-2 mb-2'>
-						<Upload className='w-5 h-5' />
-						<span className='font-medium'>
-							Upload {type === 'VIDEO' ? 'Video' : 'PDF'}
-						</span>
-					</div>
+            {selectedFile ? (
+              <div className="border-2 border-green-300 bg-green-50 rounded-xl p-5 flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    {selectedFile.name}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB ·{" "}
+                    {isNotes ? "PDF" : "Video"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setStatus("idle");
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium">
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-gray-400 transition">
+                <input
+                  type="file"
+                  onChange={handleFileSelect}
+                  accept={acceptAttr}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-2xl">
+                    {isNotes ? "📄" : "🎬"}
+                  </div>
+                  <p className="text-sm font-medium text-gray-600">
+                    Click to select a {fileLabel}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {isNotes ? "PDF only" : "MP4, MOV, AVI, MKV etc."}
+                  </p>
+                </label>
+              </div>
+            )}
+          </div>
 
-					<div className='border-2 border-dashed rounded-lg p-6 text-center'>
-						{selectedFile ? (
-							<div className='space-y-2'>
-								<p className='text-sm'>{selectedFile.name}</p>
-								<p className='text-xs text-gray-500'>
-									{(
-										selectedFile.size /
-										(1024 * 1024)
-									).toFixed(2)}{' '}
-									MB
-								</p>
-								<button
-									onClick={() => setSelectedFile(null)}
-									className='text-red-500 hover:text-red-600'
-								>
-									Remove
-								</button>
-							</div>
-						) : (
-							<div>
-								<input
-									type='file'
-									onChange={handleFileSelect}
-									accept={
-										type === 'VIDEO' ? 'video/*' : '.pdf'
-									}
-									className='hidden'
-									id='video-upload'
-								/>
-								<label
-									htmlFor='video-upload'
-									className='cursor-pointer text-blue-500 hover:text-blue-600'
-								>
-									Click to select or drag a video file here
-								</label>
-							</div>
-						)}
-					</div>
-				</div>
+          {/* Upload Progress Bar */}
+          {uploading && (
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>Uploading...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-black rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
-				{/* Upload Progress */}
-				{uploading && (
-					<div className='mb-4'>
-						<div className='h-2 bg-gray-200 rounded'>
-							<div
-								className='h-full bg-blue-500 rounded transition-all duration-300'
-								style={{ width: `${uploadProgress}%` }}
-							/>
-						</div>
-					</div>
-				)}
+          {/* Status Message */}
+          {status !== "idle" && message && (
+            <div
+              className={`mb-5 p-3 rounded-xl flex items-center gap-2 text-sm ${
+                status === "success"
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}>
+              {status === "success" ? (
+                <CheckCircle size={16} />
+              ) : (
+                <AlertCircle size={16} />
+              )}
+              {message}
+            </div>
+          )}
 
-				{/* Status Message */}
-				{message && (
-					<div
-						className={`mb-4 p-3 rounded ${
-							message.includes('Error')
-								? 'bg-red-100 text-red-700'
-								: 'bg-green-100 text-green-700'
-						}`}
-					>
-						{message}
-					</div>
-				)}
-
-				{/* Upload Button */}
-				<button
-					onClick={uploadVideo}
-					disabled={!selectedFile || !currentFolder || uploading}
-					className={`w-full p-3 rounded text-white font-medium ${
-						!selectedFile || !currentFolder || uploading
-							? 'bg-gray-400 cursor-not-allowed'
-							: 'bg-blue-500 hover:bg-blue-600'
-					}`}
-				>
-					{uploading ? 'Uploading...' : 'Upload Video'}
-				</button>
-			</div>
-		</div>
-	);
+          {/* Upload Button */}
+          <button
+            onClick={uploadFile}
+            disabled={
+              !selectedFile || !currentFolder || !name.trim() || uploading
+            }
+            className={`w-full py-3 rounded-xl font-semibold text-sm transition ${
+              !selectedFile || !currentFolder || !name.trim() || uploading
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-black text-white hover:bg-gray-800 active:scale-[0.99]"
+            }`}>
+            {uploading
+              ? `Uploading ${isNotes ? "Notes" : "Video"}...`
+              : `Upload ${isNotes ? "Notes" : "Video"}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default AddVideo;

@@ -1,84 +1,127 @@
-import { useRecoilState, useRecoilValue } from 'recoil';
-import axios from 'axios';
-import { instructorState, tokenState, isAuthenticatedSelector } from '../atoms';
-import { API_URL } from '../config';
-import { AuthResponse } from '../utils/types';
-
-const api = axios.create({
-	baseURL: `${API_URL}`,
-});
-
-api.interceptors.request.use((config) => {
-	const token = localStorage.getItem('token');
-	if (token) {
-		config.headers.Authorization = `Bearer ${token}`;
-	}
-	return config;
-});
+import { useRecoilState, useRecoilValue } from "recoil";
+import {
+  instructorState,
+  studentState,
+  tokenState,
+  isAuthenticatedSelector,
+  roleState,
+  UserRole,
+} from "../atoms";
+import { instructorSignin, instructorSignup, studentSignin } from "../api/auth";
+import { adminSignin, adminSignup } from "../api/admin";
+import { AuthResponse, StudentAuthResponse } from "../utils/types";
 
 export const useAuth = () => {
-	const [instructor, setInstructor] = useRecoilState(instructorState);
-	const [token, setToken] = useRecoilState(tokenState);
-	const isAuthenticated = useRecoilValue(isAuthenticatedSelector);
+  const [instructor, setInstructor] = useRecoilState(instructorState);
+  const [student, setStudent] = useRecoilState(studentState);
+  const [token, setToken] = useRecoilState(tokenState);
+  const [role, setRole] = useRecoilState(roleState);
+  const isAuthenticated = useRecoilValue(isAuthenticatedSelector);
 
-	const signin = async (email: string, password: string) => {
-		try {
-			const { data } = await api.post<AuthResponse>(
-				'/instructor/signin',
-				{
-					email,
-					password,
-				}
-			);
-			localStorage.setItem('token', data.token);
-			setToken(data.token);
-			setInstructor(data.instructor);
-			return data;
-		} catch (error) {
-			console.error('Signin error:', error);
-			throw error;
-		}
-	};
+  const setAuth = (token: string, userRole: UserRole) => {
+    localStorage.setItem("token", token);
+    localStorage.setItem("role", userRole ?? "");
+    setToken(token);
+    setRole(userRole);
+  };
 
-	const signup = async (signupData: {
-		name: string;
-		email: string;
-		password: string;
-		organization: string;
-	}) => {
-		try {
-			const { data } = await api.post<AuthResponse>(
-				'/instructor/signup',
-				signupData
-			);
-			localStorage.setItem('token', data.token);
-			setToken(data.token);
-			setInstructor(data.instructor);
-			return data;
-		} catch (error) {
-			console.error('Signup error:', error);
-			throw error;
-		}
-	};
+  const clearAuth = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    setToken(null);
+    setRole(null);
+    setInstructor(null);
+    setStudent(null);
+  };
 
-	const logout = async () => {
-		try {
-			await api.post('/logout');
-			localStorage.removeItem('token');
-			setToken(null);
-			setInstructor(null);
-		} catch (error) {
-			console.error('Logout error:', error);
-			throw error;
-		}
-	};
+  // ─── Instructor ────────────────────────────────────────────────────────────
 
-	return {
-		instructor,
-		isAuthenticated,
-		token,
-		signin,
-		signup,
-		logout,
-	};
+  const signin = async (email: string, password: string) => {
+    try {
+      const data: AuthResponse = await instructorSignin({ email, password });
+      setAuth(data.token, "instructor");
+      setInstructor(data.instructor);
+      return data;
+    } catch (error) {
+      console.error("Signin error:", error);
+      throw error;
+    }
+  };
+
+  const signup = async (signupData: {
+    name: string;
+    email: string;
+    password: string;
+    organization: string;
+  }) => {
+    try {
+      const data: AuthResponse = await instructorSignup(signupData);
+      setAuth(data.token, "instructor");
+      setInstructor(data.instructor);
+      return data;
+    } catch (error) {
+      console.error("Signup error:", error);
+      throw error;
+    }
+  };
+
+  // ─── Student ───────────────────────────────────────────────────────────────
+
+  const studentLogin = async (email: string, password: string) => {
+    try {
+      const data: StudentAuthResponse = await studentSignin({ email, password });
+      setAuth(data.token, "student");
+      setStudent(data.student);
+      return data;
+    } catch (error) {
+      console.error("Student signin error:", error);
+      throw error;
+    }
+  };
+
+  // ─── Admin ─────────────────────────────────────────────────────────────────
+
+  const adminLogin = async (email: string, password: string) => {
+    try {
+      const data = await adminSignin({ email, password });
+      setAuth(data.token, "admin");
+      return data;
+    } catch (error) {
+      console.error("Admin signin error:", error);
+      throw error;
+    }
+  };
+
+  const adminRegister = async (payload: {
+    name: string;
+    email: string;
+    password: string;
+  }) => {
+    try {
+      const data = await adminSignup(payload);
+      setAuth(data.token, "admin");
+      return data;
+    } catch (error) {
+      console.error("Admin signup error:", error);
+      throw error;
+    }
+  };
+
+  const logout = () => {
+    clearAuth();
+  };
+
+  return {
+    instructor,
+    student,
+    isAuthenticated,
+    token,
+    role,
+    signin,
+    signup,
+    studentLogin,
+    adminLogin,
+    adminRegister,
+    logout,
+  };
 };

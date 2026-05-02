@@ -1,14 +1,29 @@
-import { Request, Response } from 'express';
+import { Request, Response } from "express";
 
 export const extractSubdomain = (req: Request) => {
-	const referer = req.get('Referer');
+  const headerSubdomain = req.get("X-Tenant-Subdomain")?.trim();
+  if (headerSubdomain) {
+    return headerSubdomain;
+  }
 
-	const hostname = new URL(referer!).hostname;
-	const subdomain = hostname?.includes('.') ? hostname.split('.')[0] : null;
+  const candidates = [
+    req.get("Referer"),
+    req.get("Origin"),
+    req.get("Host") ? `${req.protocol}://${req.get("Host")}` : null,
+  ].filter(Boolean) as string[];
 
-	if (!subdomain) {
-		return null;
-	}
+  for (const value of candidates) {
+    try {
+      const hostname = new URL(value).hostname;
+      const subdomain = hostname.includes(".") ? hostname.split(".")[0] : null;
 
-	return subdomain;
+      if (subdomain && subdomain !== "www") {
+        return subdomain;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 };

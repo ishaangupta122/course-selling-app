@@ -1,23 +1,16 @@
-import axios from 'axios';
-import { API_URL } from '../config';
 
-export const getInstructorProfile = async () => {
-	try {
-		const token = localStorage.getItem('token');
+import { getInstructorProfile } from "./instructor";
 
-		if (!token) {
-			throw new Error('Authentication token not found');
-		}
+// Re-export for backward compat — fetches instructor profile from /instructor/profile
+export { getInstructorProfile };
 
-		const response = await axios.get(`${API_URL}/instructor/students`, {
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`,
-			},
-		});
-		return response.data.instructor;
-	} catch (error) {
-		console.error('Error fetching data', error);
-		throw error;
-	}
+// Alias used in some older components
+export const getInstructorProfileLegacy = async () => {
+  try {
+    const response = await getInstructorProfile();
+    return response.instructor;
+  } catch (error) {
+    console.error("Error fetching instructor profile", error);
+    throw error;
+  }
 };
