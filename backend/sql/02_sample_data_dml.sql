@@ -4,7 +4,7 @@ VALUES
   ('adm_001', 'Platform Admin', 'admin@example.com', 'password')
 ON CONFLICT (email) DO NOTHING;
 
--- Instructors (added slug)
+-- Instructors
 INSERT INTO instructors (id, name, email, password, organization, slug)
 VALUES
   ('ins_001', 'Alice Instructor', 'alice@example.com', 'password', 'Alice Academy', 'alice-academy'),
